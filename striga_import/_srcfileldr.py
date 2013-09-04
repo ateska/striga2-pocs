@@ -73,5 +73,4 @@ class FutureSourceFileLoader(importlib.machinery.SourceFileLoader):
 
 		The 'data' argument can be any object type that compile() supports.
 		"""
-		return _call_with_frames_removed(compile, data, path, 'exec',
-										dont_inherit=True)
+		return _call_with_frames_removed(compile, data, path, 'exec', dont_inherit=True)
