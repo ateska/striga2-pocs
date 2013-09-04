@@ -1,0 +1,12 @@
+def test():
+
+	print("ABC")
+
+	print("DEF")
+
+
+	raise RuntimeError('Error raised on line 8')
+
+
+#test()
+
