@@ -1,14 +1,6 @@
 #ifndef GREENEV_APP_H_
 #define GREENEV_APP_H_
 
-#define APP_CMD_Q_DEPTH 200
-
-struct app_cmd
-{
-	int cmd_id;
-	void * arg;
-};
-
 struct application
 {
 	int run_phase;
@@ -17,11 +9,8 @@ struct application
 	ev_signal _SIGINT;
 	ev_signal _SIGTERM;
 
-	// Items related to application command queue
-	struct app_cmd app_cmq_q[APP_CMD_Q_DEPTH];
-	int app_cmq_pos;
-	pthread_mutex_t app_cmq_q_mtx;
-	struct ev_async app_cmq_q_watcher;
+	// Command queue
+	struct cmd_q app_cmd_q;
 
 	// IO Thread
 	struct io_thread io_thread;
@@ -36,8 +25,11 @@ void application_dtor(struct application *);
 
 int application_run(struct application *);
 
-// This method is callable for other threads
-void application_command(struct application *, int cmd_id, void * arg);
+// This method is callable from other threads
+static inline void application_command(struct application * this, int app_cmd_id, void * arg)
+{
+	return cmd_q_insert(&this->app_cmd_q, app_cmd_id, arg);
+}
 
 
 /// Application run phases

@@ -3,7 +3,7 @@
 struct application * app = NULL;
 
 static void _on_terminating_signal(struct ev_loop *loop, ev_signal *w, int revents);
-static void _on_application_appcmdq(struct ev_loop *loop, ev_async *w, int revents);
+static void _on_application_cmd(void * arg, struct cmd cmd);
 
 ///
 
@@ -14,8 +14,6 @@ void application_ctor(struct application * this)
 
 	this->run_phase = app_run_phase_INIT;
 	this->exit_status = EXIT_SUCCESS;
-	this->app_cmq_pos = 0;
-	pthread_mutex_init(&this->app_cmq_q_mtx, NULL);
 
 	// Initialize default event loop
 	struct ev_loop * main_loop = ev_default_loop(EVFLAG_AUTO);
@@ -35,10 +33,7 @@ void application_ctor(struct application * this)
 	ev_signal_start(EV_DEFAULT, &this->_SIGTERM);
 	this->_SIGTERM.data = this;
 
-	// Prepare asynch watcher for application command queue
-	ev_async_init(&this->app_cmq_q_watcher, _on_application_appcmdq);
-	this->app_cmq_q_watcher.data = this;
-	ev_async_start(EV_DEFAULT, &this->app_cmq_q_watcher);
+	cmd_q_ctor(&this->app_cmd_q, EV_DEFAULT, _on_application_cmd, this);
 
 	ev_ref(EV_DEFAULT); // IO thread holds one reference to main loop
 	io_thread_ctor(&this->io_thread);
@@ -50,11 +45,10 @@ void application_dtor(struct application * this)
 
 	io_thread_dtor(&this->io_thread);
 
+	cmd_q_dtor(&this->app_cmd_q);
+
 	ev_signal_stop(EV_DEFAULT, &this->_SIGINT);
 	ev_signal_stop(EV_DEFAULT, &this->_SIGTERM);
-	ev_async_stop(EV_DEFAULT, &this->app_cmq_q_watcher);
-
-	pthread_mutex_destroy(&this->app_cmq_q_mtx);
 
 	app = NULL;
 }
@@ -78,8 +72,6 @@ It is 'protected' function, should not be called from 'external' object.
 
 	ev_signal_stop(EV_DEFAULT, &this->_SIGINT);
 	ev_signal_stop(EV_DEFAULT, &this->_SIGTERM);	
-
-	ev_unref(EV_DEFAULT); // ... for this->app_cmq_q_watcher
 
 	io_thread_die(&this->io_thread);
 }
@@ -114,48 +106,23 @@ int application_run(struct application * this)
 
 /// Command queue implementation follows 
 
-void application_command(struct application * this, int cmd_id, void * arg)
+static void _on_application_cmd(void * arg, struct cmd cmd)
 {
-	struct app_cmd new_cmd = {.cmd_id = cmd_id, .arg = arg};
+	struct application * this = arg;
 
-	// Critical (synchronised) section
-	pthread_mutex_lock(&this->app_cmq_q_mtx);
-	this->app_cmq_q[this->app_cmq_pos++] = new_cmd;
-	pthread_mutex_unlock(&this->app_cmq_q_mtx);
-
-	ev_async_send(EV_DEFAULT, &this->app_cmq_q_watcher);
-}
-
-static void _on_application_appcmdq(struct ev_loop *loop, ev_async *w, int revents)
-{
-	struct application * this = w->data;
-	struct app_cmd act_cmd;
-
-	for(;;)
+	switch (cmd.id)
 	{
-		// Critical (synchronised) section
-		pthread_mutex_lock(&this->app_cmq_q_mtx);
-		if (this->app_cmq_pos == 0)
-		{
-			pthread_mutex_unlock(&this->app_cmq_q_mtx);	
+		case app_cmd_IO_THREAD_EXIT:
+			if (this->run_phase != app_run_phase_DYING)
+			{
+				LOG_ERROR("IO thread ended prematurely - this is critical error.");
+				abort();
+			}
+			ev_unref(EV_DEFAULT); // IO thread holds one reference to main loop
 			break;
-		}
-		act_cmd = this->app_cmq_q[--this->app_cmq_pos];
-		pthread_mutex_unlock(&this->app_cmq_q_mtx);
 
-		switch (act_cmd.cmd_id)
-		{
-			case app_cmd_IO_THREAD_EXIT:
-				if (this->run_phase != app_run_phase_DYING)
-				{
-					LOG_ERROR("IO thread ended prematurely - this is critical error.");
-					abort();
-				}
-				ev_unref(EV_DEFAULT); // IO thread holds one reference to main loop
-				break;
-
-			default:
-				LOG_WARNING("Unknown application command '%d'", act_cmd.cmd_id);
-		}
+		default:
+			LOG_WARNING("Unknown application command '%d'", cmd.id);
 	}
+
 }

@@ -3,7 +3,7 @@ LDLIBS=-lev -lpthread
 
 all: greenev
 
-greenev: greenev.o app.o logging.o iothread.o
+greenev: greenev.o app.o logging.o iothread.o cmdq.o
 
 clean:
 	${RM} *.o greenev

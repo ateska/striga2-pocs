@@ -15,6 +15,7 @@
 
 #include <ev.h>
 
+#include "cmdq.h"
 #include "iothread.h"
 #include "app.h"
 
