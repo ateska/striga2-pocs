@@ -2,12 +2,23 @@
 
 static void * _io_thread_start(void *);
 static void _io_thread_cleanup(void * arg);
+static void _on_iot_cmd(void * arg, struct cmd cmd);
 
 ///
 
 void io_thread_ctor(struct io_thread * this)
 {
 	int rc;
+
+	// Create thread-specific event loop
+	this->loop = ev_loop_new(EVFLAG_NOSIGMASK);
+	if (this->loop == NULL)
+	{
+		LOG_ERROR("Failed to create inbound event loop");
+		abort();
+	}
+
+	cmd_q_ctor(&this->cmd_q, this->loop, _on_iot_cmd, this);
 
 	// Prepare creation of inbound thread
 	pthread_attr_t attr;
@@ -46,31 +57,33 @@ void io_thread_ctor(struct io_thread * this)
 
 void io_thread_dtor(struct io_thread * this)
 {
+	cmd_q_dtor(&this->cmd_q);
 }
 
 ///
 
 void io_thread_die(struct io_thread * this)
 {
-
+	io_thread_command(this, iot_cmd_IO_THREAD_DIE, NULL);
 }
 
 ///
 
 static void * _io_thread_start(void * arg)
 {
-	pthread_cleanup_push(_io_thread_cleanup, arg);  
+	struct io_thread * this = arg;
 
-//	struct io_thread * this = arg;
+	pthread_cleanup_push(_io_thread_cleanup, arg);  	
+	cmd_q_start(&this->cmd_q);
 
-/*	ev_async_start(this->loop, &this->async_watcher);
+	// Add artifical reference to prevent loop exit
+	ev_ref(this->loop);
 
 	// Start event loop
 	for(bool keep_running=true; keep_running;)
 	{
 		keep_running = ev_run(this->loop, 0);
 	}
-*/
 
 	pthread_cleanup_pop(1);
 
@@ -81,6 +94,26 @@ static void * _io_thread_start(void * arg)
 
 static void _io_thread_cleanup(void * arg)
 {
-	if (app == NULL) return;
-	application_command(app, app_cmd_IO_THREAD_EXIT, arg);
+	struct io_thread * this = arg;
+	cmd_q_stop(&this->cmd_q);
+
+	if (app != NULL) application_command(app, app_cmd_IO_THREAD_EXIT, arg);
+}
+
+///
+
+static void _on_iot_cmd(void * arg, struct cmd cmd)
+{
+	struct io_thread * this = arg;
+
+	switch (cmd.id)
+	{
+		case app_cmd_IO_THREAD_EXIT:
+			ev_unref(this->loop); // This should release artifical reference count for our loop and eventually exit iothread loop
+			break;
+
+		default:
+			LOG_WARNING("Unknown IO thread command '%d'", cmd.id);
+	}
+
 }

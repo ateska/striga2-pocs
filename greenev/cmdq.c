@@ -18,17 +18,26 @@ void cmd_q_ctor(struct cmd_q * this, struct ev_loop *loop, void (*cmdcallback)(v
 	// Prepare asynch watcher for application command queue
 	ev_async_init(&this->q_watcher, _on_cmd_q_async);
 	this->q_watcher.data = this;
-	ev_async_start(loop, &this->q_watcher);
-
-	// Don't count this watcher into loop exit blockers
-	ev_unref(loop);
 }
 
 void cmd_q_dtor(struct cmd_q * this)
 {
-	ev_async_stop(this->loop, &this->q_watcher);
+	cmd_q_stop(this);
 
 	pthread_mutex_destroy(&this->q_mtx);
+}
+
+void cmd_q_start(struct cmd_q * this)
+{
+	ev_async_start(this->loop, &this->q_watcher);
+
+	// Don't count this watcher into loop exit blockers
+	ev_unref(this->loop);
+}
+
+void cmd_q_stop(struct cmd_q * this)
+{
+	ev_async_stop(this->loop, &this->q_watcher);
 }
 
 ///

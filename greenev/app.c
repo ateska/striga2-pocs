@@ -34,6 +34,7 @@ void application_ctor(struct application * this)
 	this->_SIGTERM.data = this;
 
 	cmd_q_ctor(&this->app_cmd_q, EV_DEFAULT, _on_application_cmd, this);
+	cmd_q_start(&this->app_cmd_q);
 
 	ev_ref(EV_DEFAULT); // IO thread holds one reference to main loop
 	io_thread_ctor(&this->io_thread);
