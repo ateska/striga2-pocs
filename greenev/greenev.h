@@ -15,6 +15,7 @@
 
 #include <ev.h>
 
+#include "iothread.h"
 #include "app.h"
 
 // Logging
