@@ -153,10 +153,67 @@ static void _on_iot_cmd(void * arg, struct cmd cmd)
 			break;
 
 
+		case iot_cmd_IO_THREAD_ESTABLISH:
+		// There is prepared established (connected) socket, add that into our loop
+			{
+				struct io_thread_established_socket * sockobj = cmd.arg;
+				sockobj->next = this->established;
+				this->established = sockobj;
+
+				//TODO: Callback to Python code [SOCKET ESTABLISHED]
+				//TODO: Get initial state of socket watcher (READ and/or write) - probably from a callback or some preset
+				ev_io_set(&sockobj->watcher, sockobj->watcher.fd, EV_READ);
+				ev_io_start(this->loop, &sockobj->watcher);
+			}
+			break;		
+
 		default:
 			LOG_WARNING("Unknown IO thread command '%d'", cmd.id);
 	}
 
+}
+
+///
+
+static void _on_io_thread_readwrite(struct ev_loop *loop, struct ev_io *watcher, int revents)
+{
+	const int buffer_len = 16*1024;
+	char buffer[buffer_len];
+
+	if (revents & EV_READ)
+	{
+		ssize_t size = read(watcher->fd, buffer, buffer_len);
+		if (size == 0)
+		{
+			close(watcher->fd);
+			ev_io_stop(loop, watcher);
+
+			//TODO: Callback to Python code [SOCKET CLOSED]
+
+			struct io_thread_established_socket * sockobj = watcher->data;
+			struct io_thread_established_socket ** prev = &sockobj->io_thread->established;
+			for (struct io_thread_established_socket * i = sockobj->io_thread->established; i; prev = &i->next, i = i->next)
+			{
+				if (i == sockobj)
+				{
+					*prev = sockobj->next;
+					sockobj->next = NULL;
+					free(sockobj);
+					sockobj= NULL;
+					break;
+				}
+			}
+			assert(sockobj == NULL);
+			return;
+		} else {
+			//TODO: Callback to Python code [SOCKET READ]
+		}
+	}
+
+	if (revents & EV_WRITE)
+	{
+			//TODO: Callback to Python code [SOCKET WRITE]
+	}
 }
 
 ///
@@ -320,52 +377,100 @@ static void _on_io_thread_accept(struct ev_loop *loop, struct ev_io *watcher, in
 
 		//TODO: Callback to Python code [SOCKET ESTABLISHED]
 		//TODO: Get initial state of socket watcher (READ and/or write) - probably from a callback or some preset
-		ev_io_set (&new_sockobj->watcher, new_sockobj->watcher.fd, EV_READ);
+		ev_io_set(&new_sockobj->watcher, new_sockobj->watcher.fd, EV_READ);
 		ev_io_start(listening_sockobj->io_thread->loop, &new_sockobj->watcher);
-
 	}
 
 }
 
 ///
 
-static void _on_io_thread_readwrite(struct ev_loop *loop, struct ev_io *watcher, int revents)
+void io_thread_connect(struct io_thread * this, const char * host, const char * port)
 {
-	const int buffer_len = 16*1024;
-	char buffer[buffer_len];
+	int rc;
 
-	if (revents & EV_READ)
+	// Resolve address/port into IPv4/IPv6 address infos
+	struct addrinfo req, *ans;
+	req.ai_family = AF_UNSPEC; // Both IPv4 and IPv6 if available
+	req.ai_flags = AI_ADDRCONFIG | AI_NUMERICSERV | AI_V4MAPPED;
+	req.ai_socktype = SOCK_STREAM;
+	req.ai_protocol = IPPROTO_TCP;
+
+	rc = getaddrinfo(host, port, &req, &ans);
+	if (rc != 0)
 	{
-		ssize_t size = read(watcher->fd, buffer, buffer_len);
-		if (size == 0)
+		LOG_ERROR("Failed to resolve connect address: (%d) %s", rc, gai_strerror(rc));
+		return;
+	}
+
+	int connect_socket = -1;
+	int connect_errno = 0;
+	char hoststr[NI_MAXHOST];
+	char portstr[NI_MAXSERV];
+	strcpy(hoststr, "?");
+	strcpy(portstr, "?");
+
+	for (struct addrinfo *rp = ans; rp != NULL; rp = rp->ai_next)
+	{
+		rc = getnameinfo(rp->ai_addr, sizeof(struct sockaddr), hoststr, sizeof(hoststr), portstr, sizeof(portstr), NI_NUMERICHOST | NI_NUMERICSERV);
+		if (rc != 0)
 		{
-			close(watcher->fd);
-			ev_io_stop(loop, watcher);
-
-			//TODO: Callback to Python code [SOCKET CLOSED]
-
-			struct io_thread_established_socket * sockobj = watcher->data;
-			struct io_thread_established_socket ** prev = &sockobj->io_thread->established;
-			for (struct io_thread_established_socket * i = sockobj->io_thread->established; i; prev = &i->next, i = i->next)
-			{
-				if (i == sockobj)
-				{
-					*prev = sockobj->next;
-					sockobj->next = NULL;
-					free(sockobj);
-					sockobj= NULL;
-					break;
-				}
-			}
-			assert(sockobj == NULL);
-			return;
-		} else {
-			//TODO: Callback to Python code [SOCKET READ]
+		
+			LOG_WARNING("Problem occured when resolving connect socket: %s",gai_strerror(rc));
+			strcpy(hoststr, "?");
+			strcpy(portstr, "?");
 		}
+
+		// Create socket
+		connect_socket = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+		if (connect_socket < 0)
+		{
+			connect_errno = errno;
+			continue;
+		}
+
+		// Set reuse address option
+		int on = 1;
+		rc = setsockopt(connect_socket, SOL_SOCKET, SO_REUSEADDR, (const char *) &on, sizeof(on));
+		if (rc == -1)
+		{
+			connect_errno = errno;
+			close(connect_socket);
+			connect_socket = -1;
+			continue;
+		}
+
+		// Connect socket
+		rc = connect(connect_socket, rp->ai_addr, rp->ai_addrlen);
+		if (rc == -1)
+		{
+			connect_errno = errno;
+        	close(connect_socket);
+        	connect_socket = -1;
+        	continue;
+        }
+
+		// Add new socket object
+		struct io_thread_established_socket * new_sockobj = malloc(sizeof(struct io_thread_established_socket));
+		new_sockobj->next =  NULL;
+		ev_io_init(&new_sockobj->watcher, _on_io_thread_readwrite, connect_socket, 0);
+		new_sockobj->io_thread = this;
+		new_sockobj->watcher.data = new_sockobj;
+		new_sockobj->domain = rp->ai_family;
+		new_sockobj->type = rp->ai_socktype;
+		new_sockobj->protocol = rp->ai_protocol;
+		memcpy(&new_sockobj->address, rp->ai_addr, rp->ai_addrlen);
+		new_sockobj->address_len = rp->ai_addrlen;
+
+		cmd_q_insert(&this->cmd_q, iot_cmd_IO_THREAD_ESTABLISH, new_sockobj);
+
+		break;
 	}
 
-	if (revents & EV_WRITE)
+	if (connect_errno != 0)
 	{
-			//TODO: Callback to Python code [SOCKET WRITE]
+		LOG_ERRNO(connect_errno, "Error when establishing connection to %s %s", hoststr, portstr);
 	}
+
+	freeaddrinfo(ans);
 }

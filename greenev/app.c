@@ -41,6 +41,7 @@ void application_ctor(struct application * this)
 
 
 	io_thread_listen(&this->io_thread, "localhost", "7777", 10);
+	io_thread_connect(&this->io_thread, "localhost", "7778");
 }
 
 void application_dtor(struct application * this)

@@ -49,12 +49,17 @@ void io_thread_dtor(struct io_thread *);
 // This method is callable from other threads
 void io_thread_die(struct io_thread *);
 
-// This methid is callable from other threads
+// This method is callable from other threads
 void io_thread_listen(struct io_thread *, const char * host, const char * port, int backlog);
+
+// This method is callable from other threads
+void io_thread_connect(struct io_thread *, const char * host, const char * port);
+
 
 enum iot_cmd_ids {
 	iot_cmd_IO_THREAD_DIE = 1,
 	iot_cmd_IO_THREAD_LISTEN = 2,
+	iot_cmd_IO_THREAD_ESTABLISH = 3,
 };
 
 #endif //GREENEV_IOTHREAD_H_
