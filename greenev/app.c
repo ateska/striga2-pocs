@@ -38,6 +38,9 @@ void application_ctor(struct application * this)
 
 	ev_ref(EV_DEFAULT); // IO thread holds one reference to main loop
 	io_thread_ctor(&this->io_thread);
+
+
+	io_thread_listen(&this->io_thread, "localhost", "7777", 10);
 }
 
 void application_dtor(struct application * this)

@@ -1,14 +1,21 @@
 #include "greenev.h"
 
+#include <netdb.h>
+
 static void * _io_thread_start(void *);
 static void _io_thread_cleanup(void * arg);
 static void _on_iot_cmd(void * arg, struct cmd cmd);
+static void _on_io_thread_accept(struct ev_loop *loop, struct ev_io *watcher, int revents);
+static void _on_io_thread_readwrite(struct ev_loop *loop, struct ev_io *watcher, int revents);
 
 ///
 
 void io_thread_ctor(struct io_thread * this)
 {
 	int rc;
+
+	this->listening = NULL;
+	this->established = NULL;
 
 	// Create thread-specific event loop
 	this->loop = ev_loop_new(EVFLAG_NOSIGMASK);
@@ -64,7 +71,8 @@ void io_thread_dtor(struct io_thread * this)
 
 void io_thread_die(struct io_thread * this)
 {
-	io_thread_command(this, iot_cmd_IO_THREAD_DIE, NULL);
+	// Insert DIE command in my queue
+	cmd_q_insert(&this->cmd_q, iot_cmd_IO_THREAD_DIE, NULL);
 }
 
 ///
@@ -108,12 +116,256 @@ static void _on_iot_cmd(void * arg, struct cmd cmd)
 
 	switch (cmd.id)
 	{
+
 		case app_cmd_IO_THREAD_EXIT:
-			ev_unref(this->loop); // This should release artifical reference count for our loop and eventually exit iothread loop
+			{
+				// Close all listening sockets
+				for (struct io_thread_listening_socket * sockobj = this->listening; sockobj; sockobj = sockobj->next)
+				{
+					close(sockobj->watcher.fd);
+					ev_io_stop(this->loop, &sockobj->watcher);
+					this->listening = sockobj->next; // Remove for a list
+					free(sockobj);
+				}
+
+				// Close all established sockets
+				for (struct io_thread_established_socket * sockobj = this->established; sockobj; sockobj = sockobj->next)
+				{
+					close(sockobj->watcher.fd);
+					ev_io_stop(this->loop, &sockobj->watcher);
+					this->established = sockobj->next; // Remove for a list
+					free(sockobj);
+				}
+
+				ev_unref(this->loop); // This should release artifical reference count for our loop and eventually exit iothread loop
+			}
 			break;
+
+
+		case iot_cmd_IO_THREAD_LISTEN:
+		// There is prepared listen socket, add that into our loop
+			{
+				struct io_thread_listening_socket * sockobj = cmd.arg;
+				sockobj->next = this->listening;
+				this->listening = sockobj;
+				ev_io_start(this->loop, &sockobj->watcher);
+			}
+			break;
+
 
 		default:
 			LOG_WARNING("Unknown IO thread command '%d'", cmd.id);
 	}
 
+}
+
+///
+
+void io_thread_listen(struct io_thread * this, const char * host, const char * port, int backlog)
+{
+	//TODO: This whole function can be executed in DETACHED thread (to remove eventual blocking when resolving DNS etc.)
+
+	int rc, i;
+	bool failure = false;
+
+	// Resolve address/port into IPv4/IPv6 address infos
+	struct addrinfo req, *ans;
+	req.ai_family = AF_UNSPEC; // Both IPv4 and IPv6 if available
+	req.ai_flags = AI_PASSIVE | AI_ADDRCONFIG | AI_NUMERICSERV | AI_V4MAPPED;
+	req.ai_socktype = SOCK_STREAM;
+	req.ai_protocol = IPPROTO_TCP;
+
+	if (strcmp(host, "*") == 0) host = NULL;
+
+	rc = getaddrinfo(host, port, &req, &ans);
+	if (rc != 0)
+	{
+		LOG_ERROR("Failed to resolve listen address: (%d) %s", rc, gai_strerror(rc));
+		return;
+	}
+
+	size_t count = 0;
+	for (struct addrinfo *rp = ans; rp != NULL; rp = rp->ai_next)
+	{
+		count += 1;
+	}
+
+	int listen_socket[count];
+	for (i=0; i<count; i++) listen_socket[i] = -1;
+
+	i=0;
+	for (struct addrinfo *rp = ans; rp != NULL; rp = rp->ai_next, i++)
+	{
+		char hoststr[NI_MAXHOST];
+		char portstr[NI_MAXSERV];
+		rc = getnameinfo(rp->ai_addr, sizeof(struct sockaddr), hoststr, sizeof(hoststr), portstr, sizeof(portstr), NI_NUMERICHOST | NI_NUMERICSERV);
+		if (rc != 0)
+		{
+			LOG_WARNING("Problem occured when resolving listen socket: %s",gai_strerror(rc));
+			strcpy(hoststr, "?");
+			strcpy(portstr, "?");
+		}
+
+		// Create socket
+		listen_socket[i] = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+		if (listen_socket[i] < 0)
+		{
+			LOG_ERRNO(errno, "Failed creating listen socket");
+			failure = true;
+			goto end_freeaddrinfo;
+		}
+
+		// Set reuse address option
+		int on = 1;
+		rc = setsockopt(listen_socket[i], SOL_SOCKET, SO_REUSEADDR, (const char *) &on, sizeof(on));
+		if (rc == -1)
+		{
+			LOG_ERRNO(errno, "Failed when setting option SO_REUSEADDR to listen socket");
+			failure = true;
+			goto end_freeaddrinfo;
+		}
+
+		// Bind socket
+		rc = bind(listen_socket[i], rp->ai_addr, rp->ai_addrlen);
+		if (rc != 0)
+		{
+			LOG_ERRNO(errno, "Failed when binding listen socket to %s %s", hoststr, portstr);
+			failure = true;
+			goto end_freeaddrinfo;
+		}
+
+		// Start listening
+		rc = listen(listen_socket[i], backlog);
+		if (rc != 0)
+		{
+			LOG_ERRNO(errno, "Listening on %s %s", hoststr, portstr);
+			failure = true;
+			goto end_freeaddrinfo;
+		}
+	}
+
+	i=0;
+	for (struct addrinfo *rp = ans; rp != NULL; rp = rp->ai_next, i++)
+	{
+		struct io_thread_listening_socket * new_sockobj = malloc(sizeof(struct io_thread_listening_socket));
+		new_sockobj->next = NULL;
+		ev_io_init(&new_sockobj->watcher, _on_io_thread_accept, listen_socket[i], EV_READ);
+		new_sockobj->io_thread = this;
+		new_sockobj->watcher.data = new_sockobj;
+		new_sockobj->domain = rp->ai_family;
+		new_sockobj->type = rp->ai_socktype;
+		new_sockobj->protocol = rp->ai_protocol;
+		memcpy(&new_sockobj->address, rp->ai_addr, rp->ai_addrlen);
+		new_sockobj->address_len = rp->ai_addrlen;
+
+		cmd_q_insert(&this->cmd_q, iot_cmd_IO_THREAD_LISTEN, new_sockobj);
+	}
+
+end_freeaddrinfo:
+	freeaddrinfo(ans);
+
+	if (failure)
+	{
+		LOG_WARNING("Issue when preparing listen sockets, no listen socket created");
+		for (i=0; i<count; i++)
+		{
+			if (listen_socket[i] >= 0) close(listen_socket[i]);
+		}
+	}
+
+}
+
+
+static void _on_io_thread_accept(struct ev_loop *loop, struct ev_io *watcher, int revents)
+{
+	struct io_thread_listening_socket * listening_sockobj = watcher->data;
+
+	if (revents & EV_ERROR)
+	{
+		LOG_ERROR("Listen socket (accept) got invalid event");
+		return;
+	}
+
+	if (revents & EV_READ)
+	{
+		struct sockaddr_storage client_addr;
+		socklen_t client_len = sizeof(struct sockaddr_storage);
+
+		// Accept client request
+		int client_socket = accept(watcher->fd, (struct sockaddr *)&client_addr, &client_len);
+		if (client_socket < 0)
+		{
+			LOG_ERRNO(errno, "Accepting on inbound socket");
+			return;
+		}
+
+		if (app == NULL)
+		{
+			close(client_socket);
+			return;
+		}
+
+		// Add new socket object
+		struct io_thread_established_socket * new_sockobj = malloc(sizeof(struct io_thread_established_socket));
+		new_sockobj->next = listening_sockobj->io_thread->established;
+		listening_sockobj->io_thread->established = new_sockobj;
+		ev_io_init(&new_sockobj->watcher, _on_io_thread_readwrite, client_socket, 0);
+		new_sockobj->io_thread = listening_sockobj->io_thread;
+		new_sockobj->watcher.data = new_sockobj;
+		new_sockobj->domain = listening_sockobj->domain;
+		new_sockobj->type = listening_sockobj->type;
+		new_sockobj->protocol = listening_sockobj->protocol;
+		memcpy(&new_sockobj->address, &client_addr, client_len);
+		new_sockobj->address_len = client_len;
+
+		//TODO: Callback to Python code [SOCKET ESTABLISHED]
+		//TODO: Get initial state of socket watcher (READ and/or write) - probably from a callback or some preset
+		ev_io_set (&new_sockobj->watcher, new_sockobj->watcher.fd, EV_READ);
+		ev_io_start(listening_sockobj->io_thread->loop, &new_sockobj->watcher);
+
+	}
+
+}
+
+///
+
+static void _on_io_thread_readwrite(struct ev_loop *loop, struct ev_io *watcher, int revents)
+{
+	const int buffer_len = 16*1024;
+	char buffer[buffer_len];
+
+	if (revents & EV_READ)
+	{
+		ssize_t size = read(watcher->fd, buffer, buffer_len);
+		if (size == 0)
+		{
+			close(watcher->fd);
+			ev_io_stop(loop, watcher);
+
+			//TODO: Callback to Python code [SOCKET CLOSED]
+
+			struct io_thread_established_socket * sockobj = watcher->data;
+			struct io_thread_established_socket ** prev = &sockobj->io_thread->established;
+			for (struct io_thread_established_socket * i = sockobj->io_thread->established; i; prev = &i->next, i = i->next)
+			{
+				if (i == sockobj)
+				{
+					*prev = sockobj->next;
+					sockobj->next = NULL;
+					free(sockobj);
+					sockobj= NULL;
+					break;
+				}
+			}
+			assert(sockobj == NULL);
+			return;
+		} else {
+			//TODO: Callback to Python code [SOCKET READ]
+		}
+	}
+
+	if (revents & EV_WRITE)
+	{
+			//TODO: Callback to Python code [SOCKET WRITE]
+	}
 }
