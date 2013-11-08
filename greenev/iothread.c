@@ -387,6 +387,8 @@ static void _on_io_thread_accept(struct ev_loop *loop, struct ev_io *watcher, in
 
 void io_thread_connect(struct io_thread * this, const char * host, const char * port)
 {
+	//TODO: This whole function can be executed in DETACHED thread (to remove eventual blocking when resolving DNS etc.)
+
 	int rc;
 
 	// Resolve address/port into IPv4/IPv6 address infos
