@@ -18,7 +18,7 @@ struct application
 	// Python thread
 	struct py_thread py_thread;
 
-} application;
+};
 
 // Singleton guard and global application instance pointer
 extern struct application * app;

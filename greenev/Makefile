@@ -1,8 +1,7 @@
-PYTHON_INC=$(shell python3.3-config --includes)
-PYTHON_LDFLAGS=$(shell python3.3-config --libs --ldflags)
+CFLAGS:=-O0 -Wall -pthread -ggdb $(shell python3.3-config --cflags)
+CFLAGS:=$(filter-out -O3 -g -DNDEBUG,$(CFLAGS)) # Filter out Python flags
 
-CFLAGS=-O0 -Wall -pthread -ggdb ${PYTHON_INC}
-LDLIBS=-lev -lpthread ${PYTHON_LDFLAGS}
+LDLIBS=-lev -lpthread $(shell python3.3-config --libs --ldflags)
 
 all: greenev
 
