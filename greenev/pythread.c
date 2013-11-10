@@ -71,6 +71,7 @@ static void * _py_thread_start(void * arg)
 	Py_SetProgramName(_py_thread_args[1]);
 	Py_InspectFlag = 1;
 
+	// Ensure that _pygeapi is available
 	PyImport_AppendInittab(PYGEAPI_MODULE, &py_geapi_emb_init);
 
 	Py_InitializeEx(0); /* Skip signal initialization */
