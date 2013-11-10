@@ -1,9 +1,8 @@
-PYTHON_INC=$(shell python3 -c "import distutils.sysconfig; print(distutils.sysconfig.get_python_inc())")
-PYTHON_LIBDIR=$(shell python3 -c "import distutils.sysconfig; print(distutils.sysconfig.get_config_vars()['LIBDIR'])")
-PYTHON_VERSION=$(shell python3 -c "import distutils.sysconfig; print(distutils.sysconfig.get_python_version())")
+PYTHON_INC=$(shell python3.3-config --includes)
+PYTHON_LDFLAGS=$(shell python3.3-config --libs --ldflags)
 
-CFLAGS=-O0 -Wall -pthread -ggdb -I${PYTHON_INC}
-LDLIBS=-lev -lpthread -L${PYTHON_LIBDIR} -lpython${PYTHON_VERSION}
+CFLAGS=-O0 -Wall -pthread -ggdb ${PYTHON_INC}
+LDLIBS=-lev -lpthread ${PYTHON_LDFLAGS}
 
 all: greenev
 
