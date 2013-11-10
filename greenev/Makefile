@@ -7,7 +7,7 @@ LDLIBS=-lev -lpthread -L${PYTHON_LIBDIR} -lpython${PYTHON_VERSION}
 
 all: greenev
 
-greenev: greenev.o app.o logging.o iothread.o cmdq.o pythread.o
+greenev: greenev.o app.o logging.o iothread.o cmdq.o pythread.o pygeapi.o
 
 clean:
 	${RM} *.o greenev

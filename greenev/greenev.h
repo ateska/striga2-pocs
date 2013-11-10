@@ -21,6 +21,7 @@
 #include "iothread.h"
 #include "pythread.h"
 #include "app.h"
+#include "pygeapi.h"
 
 // Logging
 
