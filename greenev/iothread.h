@@ -53,6 +53,10 @@ void io_thread_die(struct io_thread *);
 void io_thread_listen(struct io_thread *, const char * host, const char * port, int backlog);
 
 // This method is callable from other threads
+/* Example of use:
+io_thread_connect(&this->io_thread, "localhost", "7778");
+*/
+// TODO: Autoreconnect feature
 void io_thread_connect(struct io_thread *, const char * host, const char * port);
 
 

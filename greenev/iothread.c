@@ -21,13 +21,13 @@ void io_thread_ctor(struct io_thread * this)
 	this->loop = ev_loop_new(EVFLAG_NOSIGMASK);
 	if (this->loop == NULL)
 	{
-		LOG_ERROR("Failed to create inbound event loop");
+		LOG_ERROR("Failed to create IO thread event loop");
 		abort();
 	}
 
 	cmd_q_ctor(&this->cmd_q, this->loop, _on_iot_cmd, this);
 
-	// Prepare creation of inbound thread
+	// Prepare creation of IO thread
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
 	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
@@ -38,7 +38,7 @@ void io_thread_ctor(struct io_thread * this)
 	rc = pthread_sigmask(SIG_SETMASK, &new_set, &orig_set);
 	if (rc != 0)
 	{
-		LOG_ERROR("Failed to set sigmask for inbound thread: %d", rc);
+		LOG_ERROR("Failed to set sigmask for io thread: %d", rc);
 		abort();
 	}
 
@@ -46,7 +46,7 @@ void io_thread_ctor(struct io_thread * this)
 	rc = pthread_create(&this->thread, &attr, _io_thread_start, this);
 	if (rc != 0)
 	{
-		LOG_ERROR("Failed to create inbound thread: %d", rc);
+		LOG_ERROR("Failed to create io thread: %d", rc);
 		abort();
 	}
 
@@ -54,7 +54,7 @@ void io_thread_ctor(struct io_thread * this)
 	rc = pthread_sigmask(SIG_SETMASK, &orig_set, NULL);
 	if (rc != 0)
 	{
-		LOG_ERROR("Failed to set sigmask for inbound thread (2): %d", rc);
+		LOG_ERROR("Failed to set sigmask for io thread (2): %d", rc);
 		abort();
 	}
 
@@ -352,7 +352,7 @@ static void _on_io_thread_accept(struct ev_loop *loop, struct ev_io *watcher, in
 		int client_socket = accept(watcher->fd, (struct sockaddr *)&client_addr, &client_len);
 		if (client_socket < 0)
 		{
-			LOG_ERRNO(errno, "Accepting on inbound socket");
+			LOG_ERRNO(errno, "Accept on listening socket");
 			return;
 		}
 
