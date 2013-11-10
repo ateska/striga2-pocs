@@ -15,8 +15,11 @@
 
 #include <ev.h>
 
+#include <Python.h>
+
 #include "cmdq.h"
 #include "iothread.h"
+#include "pythread.h"
 #include "app.h"
 
 // Logging

@@ -1,6 +1,6 @@
 #include "greenev.h"
 
-int main(int argc, char const *argv[])
+int main(int argc, char **argv)
 {
 	int ret = 99;
 	struct application app;
@@ -9,7 +9,7 @@ int main(int argc, char const *argv[])
 	assert(ev_version_minor() >= EV_VERSION_MINOR);
 
 	logging_init();
-	application_ctor(&app);
+	application_ctor(&app, argc, argv);
 
 	ret = application_run(&app);
 	LOG_INFO("Exiting (exit code: %d)", ret);

@@ -7,7 +7,7 @@ static void _on_application_cmd(void * arg, struct cmd cmd);
 
 ///
 
-void application_ctor(struct application * this)
+void application_ctor(struct application * this, int argc, char **argv)
 {
 	assert(app == NULL);
 	app = this;
@@ -33,23 +33,32 @@ void application_ctor(struct application * this)
 	ev_signal_start(EV_DEFAULT, &this->_SIGTERM);
 	this->_SIGTERM.data = this;
 
+	// Create application command queue
 	cmd_q_ctor(&this->app_cmd_q, EV_DEFAULT, _on_application_cmd, this);
 	cmd_q_start(&this->app_cmd_q);
 
+	// Create IO thrad
 	ev_ref(EV_DEFAULT); // IO thread holds one reference to main loop
 	io_thread_ctor(&this->io_thread);
 
+	// Initialize Python virtual machine
+	py_thread_ctor(&this->py_thread);
 
 	io_thread_listen(&this->io_thread, "localhost", "7777", 10);
-	io_thread_connect(&this->io_thread, "localhost", "7778");
+
 }
 
 void application_dtor(struct application * this)
 {
 	this->run_phase = app_run_phase_EXIT;
 
+	// Destroy python thread
+	py_thread_dtor(&this->py_thread);
+
+	// Destroy IO thread
 	io_thread_dtor(&this->io_thread);
 
+	// Destroy my command queue
 	cmd_q_dtor(&this->app_cmd_q);
 
 	ev_signal_stop(EV_DEFAULT, &this->_SIGINT);

@@ -15,12 +15,15 @@ struct application
 	// IO Thread
 	struct io_thread io_thread;
 
+	// Python thread
+	struct py_thread py_thread;
+
 } application;
 
 // Singleton guard and global application instance pointer
 extern struct application * app;
 
-void application_ctor(struct application *);
+void application_ctor(struct application *, int argc, char **argv);
 void application_dtor(struct application *);
 
 int application_run(struct application *);
