@@ -9,6 +9,7 @@ Suite * check_cmdq_suite (void)
 	/* Core test case */
 	TCase *tc_core = tcase_create("cmdq");
 	tcase_add_test(tc_core, unittest_cmdq_01);
+	tcase_add_test(tc_core, unittest_cmdq_02);
 	suite_add_tcase(s, tc_core);
 
 	return s;

@@ -42,16 +42,25 @@ void cmd_q_stop(struct cmd_q * this)
 
 ///
 
-void cmd_q_insert(struct cmd_q * this, int cmd_id, void * arg)
+bool cmd_q_insert(struct cmd_q * this, int cmd_id, void * arg)
 {
 	struct cmd new_cmd = {.id = cmd_id, .arg = arg};
 
 	// Critical (synchronised) section
 	pthread_mutex_lock(&this->q_mtx);
+
+	if (this->q_pos == CMD_Q_DEPTH)
+	{
+		pthread_mutex_unlock(&this->q_mtx);
+		return false;
+	}
+
 	this->q[this->q_pos++] = new_cmd;
+
 	pthread_mutex_unlock(&this->q_mtx);
 
 	ev_async_send(this->loop, &this->q_watcher);
+	return true;
 }
 
 static void _on_cmd_q_async(struct ev_loop *loop, ev_async *w, int revents)
