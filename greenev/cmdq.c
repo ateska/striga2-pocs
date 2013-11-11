@@ -4,9 +4,16 @@ static void _on_cmd_q_async(struct ev_loop *loop, ev_async *w, int revents);
 
 ///
 
-void cmd_q_ctor(struct cmd_q * this, struct ev_loop *loop, void (*cmdcallback)(void *, struct cmd), void * callbackarg)
+struct cmd_q * cmd_q_new(struct ev_loop *loop, unsigned int size, void (*cmdcallback)(void *, struct cmd), void * callbackarg)
 {
-	this->q_pos = 0;
+	assert(size > 0);
+
+	struct cmd_q * this = malloc(sizeof(struct cmd_q) + size * sizeof(struct cmd));
+
+	this->q_size = size;
+	this->q_head = 0;
+	this->q_tail = 0;
+
 	this->loop = loop;
 
 	this->cmdcallback = cmdcallback;
@@ -18,14 +25,24 @@ void cmd_q_ctor(struct cmd_q * this, struct ev_loop *loop, void (*cmdcallback)(v
 	// Prepare asynch watcher for application command queue
 	ev_async_init(&this->q_watcher, _on_cmd_q_async);
 	this->q_watcher.data = this;
+
+	return this;
 }
 
-void cmd_q_dtor(struct cmd_q * this)
+void cmd_q_delete(struct cmd_q * this)
 {
 	cmd_q_stop(this);
-
 	pthread_mutex_destroy(&this->q_mtx);
+
+	if (this->q_head != this->q_tail)
+	{
+		LOG_WARNING("There is some content left in a command quueue.");
+	}
+
+	free(this);
 }
+
+///
 
 void cmd_q_start(struct cmd_q * this)
 {
@@ -49,19 +66,25 @@ bool cmd_q_insert(struct cmd_q * this, int cmd_id, void * arg)
 	// Critical (synchronised) section
 	pthread_mutex_lock(&this->q_mtx);
 
-	if (this->q_pos == CMD_Q_DEPTH)
+	unsigned int q_pos = this->q_head;
+	this->q_head += 1;
+	if (this->q_head == this->q_size) this->q_head = 0;
+
+	if (this->q_head == this->q_tail)
 	{
+		this->q_head = q_pos;
 		pthread_mutex_unlock(&this->q_mtx);
 		return false;
 	}
 
-	this->q[this->q_pos++] = new_cmd;
+	this->q[q_pos] = new_cmd;
 
 	pthread_mutex_unlock(&this->q_mtx);
 
 	ev_async_send(this->loop, &this->q_watcher);
 	return true;
 }
+
 
 static void _on_cmd_q_async(struct ev_loop *loop, ev_async *w, int revents)
 {
@@ -72,12 +95,18 @@ static void _on_cmd_q_async(struct ev_loop *loop, ev_async *w, int revents)
 	{
 		// Critical (synchronised) section
 		pthread_mutex_lock(&this->q_mtx);
-		if (this->q_pos == 0)
+
+		if (this->q_head == this->q_tail) // Command queue is empty
 		{
 			pthread_mutex_unlock(&this->q_mtx);	
 			break;
 		}
-		cmd = this->q[--this->q_pos];
+
+		cmd = this->q[this->q_tail];
+
+		this->q_tail += 1;
+		if (this->q_tail == this->q_size) this->q_tail = 0;
+
 		pthread_mutex_unlock(&this->q_mtx);
 
 		this->cmdcallback(this->callbackarg, cmd);

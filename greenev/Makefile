@@ -9,6 +9,7 @@ greenev: greenev.o app.o logging.o iothread.o iobuffer.o cmdq.o pythread.o pygea
 
 clean:
 	${RM} *.o greenev
+	${MAKE} -C tests clean
 
 rebuild:
 	${MAKE} clean

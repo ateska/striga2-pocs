@@ -23,5 +23,4 @@ bool io_buffer_empty(struct io_buffer * this);
 unsigned int io_buffer_get(struct io_buffer *, unsigned int slot_count, struct iovec * iovec);
 void io_buffer_put(struct io_buffer *, unsigned int slot_count, struct iovec * iovec);
 
-
 #endif //GREENEV_IOBUFFER_H_

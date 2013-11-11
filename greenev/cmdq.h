@@ -1,8 +1,6 @@
 #ifndef GREENEV_CMDQ_H_
 #define GREENEV_CMDQ_H_
 
-#define CMD_Q_DEPTH 200
-
 struct cmd
 {
 	int id;
@@ -10,10 +8,11 @@ struct cmd
 };
 
 struct cmd_q
-/* TODO: This is more command 'stack' */
 {
-	struct cmd q[CMD_Q_DEPTH];
-	int q_pos;
+	unsigned int q_size;
+	unsigned int q_head;
+	unsigned int q_tail;
+
 
 	pthread_mutex_t q_mtx;
 	struct ev_async q_watcher;
@@ -22,11 +21,13 @@ struct cmd_q
 
 	void (*cmdcallback)(void *, struct cmd);
 	void * callbackarg;
+
+	struct cmd q[];
 };
 
 
-void cmd_q_ctor(struct cmd_q *, struct ev_loop *loop, void (*cmdcallback)(void *, struct cmd), void * callbackarg);
-void cmd_q_dtor(struct cmd_q *);
+struct cmd_q * cmd_q_new(struct ev_loop *loop, unsigned int size, void (*cmdcallback)(void *, struct cmd), void * callbackarg);
+void cmd_q_delete(struct cmd_q *);
 
 void cmd_q_start(struct cmd_q *); /* The same sence as libev ev_TYPE_start (loop, ...)*/
 void cmd_q_stop(struct cmd_q *); /* Is also implicty called by destructor */

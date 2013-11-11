@@ -19,32 +19,34 @@ Simple test of command queue object.
 Just construct that, insert two commands and destroy
 */
 {
-	struct cmd_q cmd_q;
+	struct cmd_q * cmd_q;
 	struct ev_loop * loop = ev_default_loop(EVFLAG_NOENV | EVFLAG_NOSIGMASK);
 
 	unittest_cmdq_01_result = 0;
 	unittest_cmdq_01_res_a = NULL;
 
 	// Construct command queue
-	cmd_q_ctor(&cmd_q, loop, unittest_cmdq_01_cb, (void *)0xABCD12EF);
-	cmd_q_start(&cmd_q);
+	cmd_q = cmd_q_new(loop, 256, unittest_cmdq_01_cb, (void *)0xABCD12EF);
+	ck_assert_ptr_ne(cmd_q, NULL);
+
+	cmd_q_start(cmd_q);
 
 	// Insert one command, iterate event loop once and check result
-	cmd_q_insert(&cmd_q, 1, (void *)0x1357AFDE);
+	cmd_q_insert(cmd_q, 1, (void *)0x1357AFDE);
 	ev_run(loop, EVRUN_NOWAIT);
 	ck_assert_int_eq(unittest_cmdq_01_result, 1);
 	ck_assert_ptr_eq(unittest_cmdq_01_res_a, (void *)0xABCD12EF);
 	ck_assert_ptr_eq(unittest_cmdq_01_res_cmd_arg, (void *)0x1357AFDE);
 
 	// Insert second command, iterate event loop once and check result
-	cmd_q_insert(&cmd_q, 2, NULL);
+	cmd_q_insert(cmd_q, 2, NULL);
 	ev_run(loop, EVRUN_NOWAIT);
 	ck_assert_int_eq(unittest_cmdq_01_result, 3);
 	ck_assert_ptr_eq(unittest_cmdq_01_res_cmd_arg, NULL);
 
 	// Finalize
-	cmd_q_stop(&cmd_q);
-	cmd_q_dtor(&cmd_q);
+	cmd_q_stop(cmd_q);
+	cmd_q_delete(cmd_q);
 }
 
 ///
@@ -52,25 +54,27 @@ Just construct that, insert two commands and destroy
 void unittest_cmdq_02(int _i CK_ATTRIBUTE_UNUSED)
 {
 	bool ret;
-	struct cmd_q cmd_q;
+	unsigned int q_depth = 256;
+	struct cmd_q * cmd_q;
 	struct ev_loop * loop = ev_default_loop(EVFLAG_NOENV | EVFLAG_NOSIGMASK);
 
 	// Construct command queue
-	cmd_q_ctor(&cmd_q, loop, unittest_cmdq_01_cb, NULL);
-	cmd_q_start(&cmd_q);
+	cmd_q = cmd_q_new(loop, q_depth, unittest_cmdq_01_cb, NULL);
+	ck_assert_ptr_ne(cmd_q, NULL);
+	cmd_q_start(cmd_q);
 
 	// Insert maximum number of commands
 	int expected_result = 0;
 	unittest_cmdq_01_result = 0;
-	for (int i=0; i<CMD_Q_DEPTH; i++)
+	for (unsigned int i=0; i<255; i++)
 	{
-		ret = cmd_q_insert(&cmd_q, i, NULL);
+		ret = cmd_q_insert(cmd_q, i, NULL);
 		ck_assert_int_eq(ret, true);
 		expected_result += i;
 	}
 
 	// Insert one more - this should fail ...
-	ret = cmd_q_insert(&cmd_q, -1, NULL);
+	ret = cmd_q_insert(cmd_q, -1, NULL);
 	ck_assert_int_eq(ret, false);
 
 	// Process all events in the queue
@@ -80,6 +84,50 @@ void unittest_cmdq_02(int _i CK_ATTRIBUTE_UNUSED)
 	ck_assert_int_eq(unittest_cmdq_01_result, expected_result);
 
 	// Finalize
-	cmd_q_stop(&cmd_q);
-	cmd_q_dtor(&cmd_q);
+	cmd_q_stop(cmd_q);
+	cmd_q_delete(cmd_q);
 }
+
+///
+
+int unittest_cmdq_03_result[3];
+int unittest_cmdq_03_rescnt;
+
+void unittest_cmdq_03_cb(void * a, struct cmd cmd)
+{
+	unittest_cmdq_03_result[unittest_cmdq_03_rescnt++] = cmd.id;
+}
+
+void unittest_cmdq_03(int _i CK_ATTRIBUTE_UNUSED)
+/*
+Check that command queue is keeping order of commands intact
+*/
+{
+	struct cmd_q * cmd_q;
+	struct ev_loop * loop = ev_default_loop(EVFLAG_NOENV | EVFLAG_NOSIGMASK);
+
+	unittest_cmdq_03_rescnt = 0;
+	unittest_cmdq_03_result[0] = -1;
+	unittest_cmdq_03_result[1] = -1;
+	unittest_cmdq_03_result[2] = -1;
+
+	// Construct command queue
+	cmd_q = cmd_q_new(loop, 256, unittest_cmdq_03_cb, NULL);
+	cmd_q_start(cmd_q);
+
+	// Insert one command, iterate event loop once and check result
+	cmd_q_insert(cmd_q, 1, NULL);
+	cmd_q_insert(cmd_q, 2, NULL);
+
+	// Process all events in the queue
+	ev_run(loop, EVRUN_NOWAIT);
+
+	ck_assert_int_eq(unittest_cmdq_03_result[0], 1);
+	ck_assert_int_eq(unittest_cmdq_03_result[1], 2);
+	ck_assert_int_eq(unittest_cmdq_03_result[2], -1);
+
+	// Finalize
+	cmd_q_stop(cmd_q);
+	cmd_q_delete(cmd_q);
+}
+

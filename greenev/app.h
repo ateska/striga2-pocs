@@ -10,7 +10,7 @@ struct application
 	ev_signal _SIGTERM;
 
 	// Command queue
-	struct cmd_q app_cmd_q;
+	struct cmd_q * app_cmd_q;
 
 	// IO Thread
 	struct io_thread io_thread;
@@ -31,7 +31,7 @@ int application_run(struct application *);
 // This method is callable from other threads
 static inline bool application_command(struct application * this, int app_cmd_id, void * arg)
 {
-	return cmd_q_insert(&this->app_cmd_q, app_cmd_id, arg);
+	return cmd_q_insert(this->app_cmd_q, app_cmd_id, arg);
 }
 
 

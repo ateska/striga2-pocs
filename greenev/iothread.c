@@ -26,7 +26,7 @@ void io_thread_ctor(struct io_thread * this)
 		abort();
 	}
 
-	cmd_q_ctor(&this->cmd_q, this->loop, _on_iot_cmd, this);
+	this->cmd_q = cmd_q_new(this->loop, 256, _on_iot_cmd, this);
 
 	// Create IO buffer (just temporary location of this code)
 	this->tmp_io_buf = io_buffer_new();
@@ -68,7 +68,7 @@ void io_thread_ctor(struct io_thread * this)
 
 void io_thread_dtor(struct io_thread * this)
 {
-	cmd_q_dtor(&this->cmd_q);
+	cmd_q_delete(this->cmd_q);
 	io_buffer_delete(this->tmp_io_buf);
 }
 
@@ -77,7 +77,7 @@ void io_thread_dtor(struct io_thread * this)
 void io_thread_die(struct io_thread * this)
 {
 	// Insert DIE command in my queue
-	cmd_q_insert(&this->cmd_q, iot_cmd_IO_THREAD_DIE, NULL);
+	cmd_q_insert(this->cmd_q, iot_cmd_IO_THREAD_DIE, NULL);
 }
 
 ///
@@ -87,7 +87,7 @@ static void * _io_thread_start(void * arg)
 	struct io_thread * this = arg;
 
 	pthread_cleanup_push(_io_thread_cleanup, arg);  	
-	cmd_q_start(&this->cmd_q);
+	cmd_q_start(this->cmd_q);
 
 	// Add artifical reference to prevent loop exit
 	ev_ref(this->loop);
@@ -108,7 +108,7 @@ static void * _io_thread_start(void * arg)
 static void _io_thread_cleanup(void * arg)
 {
 	struct io_thread * this = arg;
-	cmd_q_stop(&this->cmd_q);
+	cmd_q_stop(this->cmd_q);
 
 	if (app != NULL) application_command(app, app_cmd_IO_THREAD_EXIT, arg);
 }
@@ -357,7 +357,7 @@ void io_thread_listen(struct io_thread * this, const char * host, const char * p
 		memcpy(&new_sockobj->address, rp->ai_addr, rp->ai_addrlen);
 		new_sockobj->address_len = rp->ai_addrlen;
 
-		cmd_q_insert(&this->cmd_q, iot_cmd_IO_THREAD_LISTEN, new_sockobj);
+		cmd_q_insert(this->cmd_q, iot_cmd_IO_THREAD_LISTEN, new_sockobj);
 	}
 
 end_freeaddrinfo:
@@ -506,7 +506,7 @@ void io_thread_connect(struct io_thread * this, const char * host, const char * 
 		memcpy(&new_sockobj->address, rp->ai_addr, rp->ai_addrlen);
 		new_sockobj->address_len = rp->ai_addrlen;
 
-		cmd_q_insert(&this->cmd_q, iot_cmd_IO_THREAD_ESTABLISH, new_sockobj);
+		cmd_q_insert(this->cmd_q, iot_cmd_IO_THREAD_ESTABLISH, new_sockobj);
 
 		break;
 	}
