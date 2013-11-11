@@ -13,5 +13,6 @@ clean:
 rebuild:
 	${MAKE} clean
 	${MAKE} all
+	${MAKE} -C tests
 
 .PHONY: clean all rebuild
