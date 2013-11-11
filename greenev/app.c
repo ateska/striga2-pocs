@@ -43,10 +43,8 @@ void application_ctor(struct application * this, int argc, char **argv)
 
 	// Initialize Python virtual machine
 	py_thread_ctor(&this->py_thread);
-
-	io_thread_listen(&this->io_thread, "localhost", "7777", 10);
-
 }
+
 
 void application_dtor(struct application * this)
 {
@@ -134,6 +132,7 @@ static void _on_application_cmd(void * arg, struct cmd cmd)
 			}
 			ev_unref(EV_DEFAULT); // IO thread holds one reference to main loop
 			break;
+
 
 		default:
 			LOG_WARNING("Unknown application command '%d'", cmd.id);

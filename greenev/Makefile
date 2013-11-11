@@ -5,7 +5,7 @@ LDLIBS=-lev -lpthread $(shell python3-config --libs --ldflags)
 
 all: greenev
 
-greenev: greenev.o app.o logging.o iothread.o cmdq.o pythread.o pygeapi.o
+greenev: greenev.o app.o logging.o iothread.o iobuffer.o cmdq.o pythread.o pygeapi.o
 
 clean:
 	${RM} *.o greenev

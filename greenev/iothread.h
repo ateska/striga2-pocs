@@ -41,6 +41,9 @@ struct io_thread
 
 	// Command queue
 	struct cmd_q cmd_q;
+
+
+	struct io_buffer * tmp_io_buf; //This is just temporary location
 };
 
 void io_thread_ctor(struct io_thread *);
@@ -59,6 +62,8 @@ io_thread_connect(&this->io_thread, "localhost", "7778");
 // TODO: Autoreconnect feature
 void io_thread_connect(struct io_thread *, const char * host, const char * port);
 
+
+void io_thread_sockobj_close(struct io_thread * this, struct io_thread_established_socket * sockobj);
 
 enum iot_cmd_ids {
 	iot_cmd_IO_THREAD_DIE = 1,

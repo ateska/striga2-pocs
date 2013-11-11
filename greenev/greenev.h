@@ -18,6 +18,7 @@
 #include <Python.h>
 
 #include "cmdq.h"
+#include "iobuffer.h"
 #include "iothread.h"
 #include "pythread.h"
 #include "app.h"

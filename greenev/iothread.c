@@ -1,6 +1,7 @@
 #include "greenev.h"
 
 #include <netdb.h>
+#include <sys/uio.h> // readv()
 
 static void * _io_thread_start(void *);
 static void _io_thread_cleanup(void * arg);
@@ -26,6 +27,9 @@ void io_thread_ctor(struct io_thread * this)
 	}
 
 	cmd_q_ctor(&this->cmd_q, this->loop, _on_iot_cmd, this);
+
+	// Create IO buffer (just temporary location of this code)
+	this->tmp_io_buf = io_buffer_new();
 
 	// Prepare creation of IO thread
 	pthread_attr_t attr;
@@ -65,6 +69,7 @@ void io_thread_ctor(struct io_thread * this)
 void io_thread_dtor(struct io_thread * this)
 {
 	cmd_q_dtor(&this->cmd_q);
+	io_buffer_delete(this->tmp_io_buf);
 }
 
 ///
@@ -117,7 +122,7 @@ static void _on_iot_cmd(void * arg, struct cmd cmd)
 	switch (cmd.id)
 	{
 
-		case app_cmd_IO_THREAD_EXIT:
+		case iot_cmd_IO_THREAD_DIE:
 			{
 				// Close all listening sockets
 				for (struct io_thread_listening_socket * sockobj = this->listening; sockobj; sockobj = sockobj->next)
@@ -175,38 +180,75 @@ static void _on_iot_cmd(void * arg, struct cmd cmd)
 
 ///
 
+void io_thread_sockobj_close(struct io_thread * this, struct io_thread_established_socket * sockobj)
+{
+	assert(this == sockobj->io_thread);
+
+	close(sockobj->watcher.fd);
+	ev_io_stop(this->loop, &sockobj->watcher);
+
+	//TODO: Callback to Python code [SOCKET CLOSED]
+
+	struct io_thread_established_socket ** prev = &this->established;
+	for (struct io_thread_established_socket * i = this->established; i; prev = &i->next, i = i->next)
+	{
+		if (i == sockobj)
+		{
+			*prev = sockobj->next;
+			sockobj->next = NULL;
+			free(sockobj);
+			sockobj= NULL;
+			break;
+		}
+	}
+	assert(sockobj == NULL);
+
+}
+
 static void _on_io_thread_readwrite(struct ev_loop *loop, struct ev_io *watcher, int revents)
 {
-	const int buffer_len = 16*1024;
-	char buffer[buffer_len];
+	const unsigned int wanted_iovcnt = 4;
+
+	struct io_thread_established_socket * sockobj = watcher->data;
+	struct io_thread * this = sockobj->io_thread;
 
 	if (revents & EV_READ)
 	{
-		ssize_t size = read(watcher->fd, buffer, buffer_len);
-		if (size == 0)
+		struct iovec iovec[wanted_iovcnt];
+		int iovcnt = io_buffer_get(this->tmp_io_buf, wanted_iovcnt, iovec);
+		if (iovcnt == 0)
 		{
-			close(watcher->fd);
-			ev_io_stop(loop, watcher);
-
-			//TODO: Callback to Python code [SOCKET CLOSED]
-
-			struct io_thread_established_socket * sockobj = watcher->data;
-			struct io_thread_established_socket ** prev = &sockobj->io_thread->established;
-			for (struct io_thread_established_socket * i = sockobj->io_thread->established; i; prev = &i->next, i = i->next)
-			{
-				if (i == sockobj)
-				{
-					*prev = sockobj->next;
-					sockobj->next = NULL;
-					free(sockobj);
-					sockobj= NULL;
-					break;
-				}
-			}
-			assert(sockobj == NULL);
+			LOG_WARNING("IO buffer is full.");
 			return;
-		} else {
-			//TODO: Callback to Python code [SOCKET READ]
+		}
+
+		ssize_t size = readv(watcher->fd, iovec, iovcnt);
+
+		if (size < 0) // ERROR ON SOCKET
+		{
+			LOG_ERRNO(errno, "Error on the socket (closing)");
+			io_thread_sockobj_close(this, sockobj);
+			io_buffer_put(this->tmp_io_buf, iovcnt, iovec); // Return IO buffers
+			return;
+		} else if (size == 0) // SOCKET CLOSED
+		{
+			io_thread_sockobj_close(this, sockobj);
+			io_buffer_put(this->tmp_io_buf, iovcnt, iovec); // Return IO buffers
+			return;
+		} else {  // SOCKET READ DETECTED
+			int used_iovcnt = 1+(	(size-1) / io_buffer_slot_size);
+
+			if (used_iovcnt == wanted_iovcnt)
+			{
+				// This is kind of important information for fine-tuning
+				LOG_DEBUG("Read exhausted available IO buffers");
+			} else if (used_iovcnt < iovcnt)
+			{
+				// Return unused IO buffers
+				io_buffer_put(this->tmp_io_buf, iovcnt-used_iovcnt, &iovec[used_iovcnt]);
+			}
+
+			//TODO: Callback to Python code [SOCKET READ] with iovec and used_iovcnt
 		}
 	}
 

@@ -64,7 +64,7 @@ wchar_t *_py_thread_args[] = {L"-m", L"./greenev", L""};
 
 static void * _py_thread_start(void * arg)
 {
-	//struct py_thread * this = arg;
+	struct py_thread * this = arg;
 
 	pthread_cleanup_push(_py_thread_cleanup, arg);
 
@@ -78,11 +78,13 @@ static void * _py_thread_start(void * arg)
 
 	PySys_SetArgv(2, _py_thread_args);
 
+	PyObject* this_pyobj = PyCapsule_New(this, "py_thread", NULL);
+	PySys_SetObject("pygeapi_py_thread", this_pyobj);
+	Py_DECREF(this_pyobj);
+
 	PySys_ResetWarnOptions();
 	
-	int ret = _py_run_module(L"_greenev", 1);
-	LOG_DEBUG("Python exited: %d", ret);
-	//TODO: There should be some loop in the Python
+	int ret = _py_run_module(L"demo", 1);
 
 	pthread_cleanup_pop(1);
 
@@ -95,7 +97,9 @@ static void * _py_thread_start(void * arg)
 static void _py_thread_cleanup(void * arg)
 {
 	//struct py_thread * this = arg;
+	if (app != NULL) application_command(app, app_cmd_PY_THREAD_EXIT, arg);
 }
+
 
 static int _py_run_module(wchar_t *modname, int set_argv0)
 {
@@ -104,14 +108,14 @@ static int _py_run_module(wchar_t *modname, int set_argv0)
 	runpy = PyImport_ImportModule("runpy");
 	if (runpy == NULL)
 	{
-		fprintf(stderr, "Could not import runpy module\n");
+		LOG_ERROR("Could not import runpy module");
 		return -1;
 	}
 
 	runmodule = PyObject_GetAttrString(runpy, "_run_module_as_main");
 	if (runmodule == NULL)
 	{
-		fprintf(stderr, "Could not access runpy._run_module_as_main\n");
+		LOG_ERROR("Could not access runpy._run_module_as_main");
 		Py_DECREF(runpy);
 		return -1;
 	}
@@ -119,7 +123,7 @@ static int _py_run_module(wchar_t *modname, int set_argv0)
 	module = PyUnicode_FromWideChar(modname, wcslen(modname));
 	if (module == NULL)
 	{
-		fprintf(stderr, "Could not convert module name to unicode\n");
+		LOG_ERROR("Could not convert module name to unicode");
 		Py_DECREF(runpy);
 		Py_DECREF(runmodule);
 		return -1;
@@ -128,8 +132,7 @@ static int _py_run_module(wchar_t *modname, int set_argv0)
 	runargs = Py_BuildValue("(Oi)", module, set_argv0);
 	if (runargs == NULL)
 	{
-		fprintf(stderr,
-			"Could not create arguments for runpy._run_module_as_main\n");
+		LOG_ERROR("Could not create arguments for runpy._run_module_as_main");
 		Py_DECREF(runpy);
 		Py_DECREF(runmodule);
 		Py_DECREF(module);

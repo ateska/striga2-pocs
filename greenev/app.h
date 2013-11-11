@@ -46,6 +46,7 @@ enum app_run_phases {
 /// Application commands
 enum app_cmd_id {
 	app_cmd_IO_THREAD_EXIT = 1,
+	app_cmd_PY_THREAD_EXIT = 2,
 };
 
 #endif //GREENEV_APP_H_
