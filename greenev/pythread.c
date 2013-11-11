@@ -12,6 +12,9 @@ void py_thread_ctor(struct py_thread * this)
 
 	int rc;
 
+	// Create command queue
+	this->cmd_q = cond_cmd_q_new(256);
+
 	// Prepare creation of python thread
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
@@ -56,6 +59,8 @@ void py_thread_dtor(struct py_thread * this)
 
 	Py_Finalize(); // Finalize Python interpretter
 	// This function is here since premature call of this function spoils signal handlers set by libev
+
+	cond_cmd_q_delete(this->cmd_q);
 }
 
 ///

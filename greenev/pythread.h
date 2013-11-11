@@ -4,7 +4,7 @@
 struct py_thread
 {
 	pthread_t thread;
-
+	struct cond_cmd_q * cmd_q;
 };
 
 
