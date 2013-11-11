@@ -38,7 +38,8 @@ void watcher_cmd_q_start(struct watcher_cmd_q *); /* The same sence as libev ev_
 void watcher_cmd_q_stop(struct watcher_cmd_q *); /* Is also implicty called by destructor */
 
 // This method is callable from other threads
-bool watcher_cmd_q_insert(struct watcher_cmd_q * this, int cmd_id, void * arg);
+bool watcher_cmd_q_put(struct watcher_cmd_q *, int cmd_id, void * arg);
+
 ///
 
 struct cond_cmd_q

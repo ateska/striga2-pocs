@@ -31,7 +31,7 @@ int application_run(struct application *);
 // This method is callable from other threads
 static inline bool application_command(struct application * this, int app_cmd_id, void * arg)
 {
-	return watcher_cmd_q_insert(this->app_cmd_q, app_cmd_id, arg);
+	return watcher_cmd_q_put(this->app_cmd_q, app_cmd_id, arg);
 }
 
 

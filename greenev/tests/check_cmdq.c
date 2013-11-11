@@ -32,14 +32,14 @@ Just construct that, insert two commands and destroy
 	watcher_cmd_q_start(cmd_q);
 
 	// Insert one command, iterate event loop once and check result
-	watcher_cmd_q_insert(cmd_q, 1, (void *)0x1357AFDE);
+	watcher_cmd_q_put(cmd_q, 1, (void *)0x1357AFDE);
 	ev_run(loop, EVRUN_NOWAIT);
 	ck_assert_int_eq(unittest_cmdq_01_result, 1);
 	ck_assert_ptr_eq(unittest_cmdq_01_res_a, (void *)0xABCD12EF);
 	ck_assert_ptr_eq(unittest_cmdq_01_res_cmd_arg, (void *)0x1357AFDE);
 
 	// Insert second command, iterate event loop once and check result
-	watcher_cmd_q_insert(cmd_q, 2, NULL);
+	watcher_cmd_q_put(cmd_q, 2, NULL);
 	ev_run(loop, EVRUN_NOWAIT);
 	ck_assert_int_eq(unittest_cmdq_01_result, 3);
 	ck_assert_ptr_eq(unittest_cmdq_01_res_cmd_arg, NULL);
@@ -68,13 +68,13 @@ void unittest_cmdq_02(int _i CK_ATTRIBUTE_UNUSED)
 	unittest_cmdq_01_result = 0;
 	for (unsigned int i=0; i<255; i++)
 	{
-		ret = watcher_cmd_q_insert(cmd_q, i, NULL);
+		ret = watcher_cmd_q_put(cmd_q, i, NULL);
 		ck_assert_int_eq(ret, true);
 		expected_result += i;
 	}
 
 	// Insert one more - this should fail ...
-	ret = watcher_cmd_q_insert(cmd_q, -1, NULL);
+	ret = watcher_cmd_q_put(cmd_q, -1, NULL);
 	ck_assert_int_eq(ret, false);
 
 	// Process all events in the queue
@@ -116,8 +116,8 @@ Check that command queue is keeping order of commands intact
 	watcher_cmd_q_start(cmd_q);
 
 	// Insert one command, iterate event loop once and check result
-	watcher_cmd_q_insert(cmd_q, 1, NULL);
-	watcher_cmd_q_insert(cmd_q, 2, NULL);
+	watcher_cmd_q_put(cmd_q, 1, NULL);
+	watcher_cmd_q_put(cmd_q, 2, NULL);
 
 	// Process all events in the queue
 	ev_run(loop, EVRUN_NOWAIT);

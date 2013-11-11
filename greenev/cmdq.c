@@ -59,7 +59,7 @@ void watcher_cmd_q_stop(struct watcher_cmd_q * this)
 
 ///
 
-bool watcher_cmd_q_insert(struct watcher_cmd_q * this, int cmd_id, void * arg)
+bool watcher_cmd_q_put(struct watcher_cmd_q * this, int cmd_id, void * arg)
 {
 	struct cmd new_cmd = {.id = cmd_id, .arg = arg};
 

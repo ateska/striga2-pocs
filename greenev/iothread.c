@@ -77,7 +77,7 @@ void io_thread_dtor(struct io_thread * this)
 void io_thread_die(struct io_thread * this)
 {
 	// Insert DIE command in my queue
-	watcher_cmd_q_insert(this->cmd_q, iot_cmd_IO_THREAD_DIE, NULL);
+	watcher_cmd_q_put(this->cmd_q, iot_cmd_IO_THREAD_DIE, NULL);
 }
 
 ///
@@ -357,7 +357,7 @@ void io_thread_listen(struct io_thread * this, const char * host, const char * p
 		memcpy(&new_sockobj->address, rp->ai_addr, rp->ai_addrlen);
 		new_sockobj->address_len = rp->ai_addrlen;
 
-		watcher_cmd_q_insert(this->cmd_q, iot_cmd_IO_THREAD_LISTEN, new_sockobj);
+		watcher_cmd_q_put(this->cmd_q, iot_cmd_IO_THREAD_LISTEN, new_sockobj);
 	}
 
 end_freeaddrinfo:
@@ -506,7 +506,7 @@ void io_thread_connect(struct io_thread * this, const char * host, const char * 
 		memcpy(&new_sockobj->address, rp->ai_addr, rp->ai_addrlen);
 		new_sockobj->address_len = rp->ai_addrlen;
 
-		watcher_cmd_q_insert(this->cmd_q, iot_cmd_IO_THREAD_ESTABLISH, new_sockobj);
+		watcher_cmd_q_put(this->cmd_q, iot_cmd_IO_THREAD_ESTABLISH, new_sockobj);
 
 		break;
 	}
