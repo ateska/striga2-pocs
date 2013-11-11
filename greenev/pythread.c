@@ -2,7 +2,7 @@
 
 static void * _py_thread_start(void *);
 static void _py_thread_cleanup(void * arg);
-static int _py_run_module(wchar_t *modname, int set_argv0);
+static bool _py_run_module(wchar_t *modname, int set_argv0);
 
 ///
 
@@ -84,7 +84,7 @@ static void * _py_thread_start(void * arg)
 
 	PySys_ResetWarnOptions();
 	
-	int ret = _py_run_module(L"demo", 1);
+	_py_run_module(L"demo", 1);
 
 	pthread_cleanup_pop(1);
 
@@ -101,7 +101,7 @@ static void _py_thread_cleanup(void * arg)
 }
 
 
-static int _py_run_module(wchar_t *modname, int set_argv0)
+static bool _py_run_module(wchar_t *modname, int set_argv0)
 {
 	PyObject *module, *runpy, *runmodule, *runargs, *result;
 
@@ -109,7 +109,7 @@ static int _py_run_module(wchar_t *modname, int set_argv0)
 	if (runpy == NULL)
 	{
 		LOG_ERROR("Could not import runpy module");
-		return -1;
+		return false;
 	}
 
 	runmodule = PyObject_GetAttrString(runpy, "_run_module_as_main");
@@ -117,7 +117,7 @@ static int _py_run_module(wchar_t *modname, int set_argv0)
 	{
 		LOG_ERROR("Could not access runpy._run_module_as_main");
 		Py_DECREF(runpy);
-		return -1;
+		return false;
 	}
 
 	module = PyUnicode_FromWideChar(modname, wcslen(modname));
@@ -126,7 +126,7 @@ static int _py_run_module(wchar_t *modname, int set_argv0)
 		LOG_ERROR("Could not convert module name to unicode");
 		Py_DECREF(runpy);
 		Py_DECREF(runmodule);
-		return -1;
+		return false;
 	}
 
 	runargs = Py_BuildValue("(Oi)", module, set_argv0);
@@ -136,7 +136,7 @@ static int _py_run_module(wchar_t *modname, int set_argv0)
 		Py_DECREF(runpy);
 		Py_DECREF(runmodule);
 		Py_DECREF(module);
-		return -1;
+		return false;
 	}
 
 	result = PyObject_Call(runmodule, runargs, NULL);
@@ -151,8 +151,9 @@ static int _py_run_module(wchar_t *modname, int set_argv0)
 	Py_DECREF(runargs);
 	if (result == NULL)
 	{
-		return -1;
+		return false;
 	}
 	Py_DECREF(result);
-	return 0;
+
+	return true;
 }

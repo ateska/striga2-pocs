@@ -42,6 +42,7 @@ void application_ctor(struct application * this, int argc, char **argv)
 	io_thread_ctor(&this->io_thread);
 
 	// Initialize Python virtual machine
+	ev_ref(EV_DEFAULT); // Python thread holds one reference to main loop
 	py_thread_ctor(&this->py_thread);
 }
 
@@ -116,7 +117,7 @@ int application_run(struct application * this)
 	return this->exit_status;
 }
 
-/// Command queue implementation follows 
+///
 
 static void _on_application_cmd(void * arg, struct cmd cmd)
 {
@@ -134,8 +135,17 @@ static void _on_application_cmd(void * arg, struct cmd cmd)
 			break;
 
 
+		case app_cmd_PY_THREAD_EXIT:
+			if (this->run_phase != app_run_phase_DYING)
+			{
+				LOG_ERROR("Python thread ended prematurely - this is critical error.");
+				//TODO: Uncomment this as soon as Python event loop is stable: abort();
+			}
+			ev_unref(EV_DEFAULT); // Python thread holds one reference to main loop
+			break;
+
+
 		default:
 			LOG_WARNING("Unknown application command '%d'", cmd.id);
 	}
-
 }

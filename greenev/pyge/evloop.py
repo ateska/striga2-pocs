@@ -9,5 +9,5 @@ class event_loop(object):
 	def run(self):
 		pass
 
-	def listen(self, hostname, port):
-		_pygeapi.io_thread_listen(sys.pygeapi_py_thread, hostname, str(port))
+	def listen(self, hostname, port, backlog=10):
+		_pygeapi.io_thread_listen(sys.pygeapi_py_thread, hostname, str(port), backlog)

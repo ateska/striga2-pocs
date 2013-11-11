@@ -29,7 +29,7 @@ void application_dtor(struct application *);
 int application_run(struct application *);
 
 // This method is callable from other threads
-static inline void application_command(struct application * this, int app_cmd_id, void * arg)
+static inline bool application_command(struct application * this, int app_cmd_id, void * arg)
 {
 	return cmd_q_insert(&this->app_cmd_q, app_cmd_id, arg);
 }

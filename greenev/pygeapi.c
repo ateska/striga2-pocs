@@ -5,9 +5,11 @@ static PyObject* py_geapi_io_thread_listen(PyObject *self, PyObject *args)
 	PyObject * py_thread_capsule;
 	const char *hostname;
 	const char *port;
-	if (!PyArg_ParseTuple(args, "Oss", &py_thread_capsule, &hostname, &port)) return NULL;
+	int backlog;
 
-	if (app != NULL) io_thread_listen(&app->io_thread, hostname, port, 10);
+	if (!PyArg_ParseTuple(args, "Ossi", &py_thread_capsule, &hostname, &port, &backlog)) return NULL;
+
+	if (app != NULL) io_thread_listen(&app->io_thread, hostname, port, backlog);
 
 	Py_RETURN_NONE;
 }
