@@ -9,4 +9,4 @@ all: unit_tests
 clean:
 	${RM} check_cmdq *.o
 
-unit_tests: unit_tests.o check_cmdq.o ../cmdq.o ../logging.o
+unit_tests: unit_tests.o check_cmdq.o ../cmdq_ev.o ../logging.o

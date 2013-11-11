@@ -1,3 +1,8 @@
+/*
+
+Watcher-based (libev) command queue class implementation
+
+*/
 #include "greenev.h"
 
 static void _on_watcher_cmd_q_async(struct ev_loop *loop, ev_async *w, int revents);
@@ -9,6 +14,7 @@ struct watcher_cmd_q * watcher_cmd_q_new(struct ev_loop *loop, unsigned int size
 	assert(size > 0);
 
 	struct watcher_cmd_q * this = malloc(sizeof(struct watcher_cmd_q) + size * sizeof(struct cmd));
+	if (this == NULL) return NULL;
 
 	this->q_size = size;
 	this->q_head = 0;

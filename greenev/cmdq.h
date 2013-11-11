@@ -69,10 +69,21 @@ bool cond_cmd_q_empty(struct cond_cmd_q *);
 bool cond_cmd_q_full(struct cond_cmd_q *);
 
 bool cond_cmd_q_put(struct cond_cmd_q *, int cmd_id, void * arg);
-bool cond_cmd_q_timed_put(struct cond_cmd_q *, int cmd_id, void * arg, unsigned int timeout_ms);
+int cond_cmd_q_timed_put(struct cond_cmd_q * this, int cmd_id, void * arg, unsigned int timeout_ms);
+/*
+Return values:
+-1 - error
+0 - timeout occured (item is not inserted)
+1 - item is successfully inserted into queue
+*/
 
 bool cond_cmd_q_get(struct cond_cmd_q *, struct cmd * cmd_out);
-bool cond_cmd_q_timed_get(struct cond_cmd_q *, struct cmd * cmd_out, unsigned int timeout_ms);
-
+int cond_cmd_q_timed_get(struct cond_cmd_q *, struct cmd * cmd_out, unsigned int timeout_ms);
+/*
+Return values:
+-1 - error
+0 - timeout occured (item is not inserted)
+1 - item is successfully inserted into queue
+*/
 
 #endif //GREENEV_CMDQ_H_
