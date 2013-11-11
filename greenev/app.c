@@ -34,8 +34,8 @@ void application_ctor(struct application * this, int argc, char **argv)
 	this->_SIGTERM.data = this;
 
 	// Create application command queue
-	this->app_cmd_q = cmd_q_new(EV_DEFAULT, 256, _on_application_cmd, this);
-	cmd_q_start(this->app_cmd_q);
+	this->app_cmd_q = watcher_cmd_q_new(EV_DEFAULT, 256, _on_application_cmd, this);
+	watcher_cmd_q_start(this->app_cmd_q);
 
 	// Create IO thrad
 	ev_ref(EV_DEFAULT); // IO thread holds one reference to main loop
@@ -58,7 +58,7 @@ void application_dtor(struct application * this)
 	io_thread_dtor(&this->io_thread);
 
 	// Destroy my command queue
-	cmd_q_delete(this->app_cmd_q);
+	watcher_cmd_q_delete(this->app_cmd_q);
 
 	ev_signal_stop(EV_DEFAULT, &this->_SIGINT);
 	ev_signal_stop(EV_DEFAULT, &this->_SIGTERM);

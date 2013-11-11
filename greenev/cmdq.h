@@ -7,7 +7,12 @@ struct cmd
 	void * arg;
 };
 
-struct cmd_q
+struct watcher_cmd_q
+/*
+Watcher-based (libev watcher) command queue.
+It uses ev_async watcher from libev to synchronize producers and consumers.
+This one is useful when processing thread has to handle libev events (e.g. socket or signals)
+*/
 {
 	unsigned int q_size;
 	unsigned int q_head;
@@ -26,13 +31,13 @@ struct cmd_q
 };
 
 
-struct cmd_q * cmd_q_new(struct ev_loop *loop, unsigned int size, void (*cmdcallback)(void *, struct cmd), void * callbackarg);
-void cmd_q_delete(struct cmd_q *);
+struct watcher_cmd_q * watcher_cmd_q_new(struct ev_loop *loop, unsigned int size, void (*cmdcallback)(void *, struct cmd), void * callbackarg);
+void watcher_cmd_q_delete(struct watcher_cmd_q *);
 
-void cmd_q_start(struct cmd_q *); /* The same sence as libev ev_TYPE_start (loop, ...)*/
-void cmd_q_stop(struct cmd_q *); /* Is also implicty called by destructor */
+void watcher_cmd_q_start(struct watcher_cmd_q *); /* The same sence as libev ev_TYPE_start (loop, ...)*/
+void watcher_cmd_q_stop(struct watcher_cmd_q *); /* Is also implicty called by destructor */
 
 // This method is callable from other threads
-bool cmd_q_insert(struct cmd_q * this, int cmd_id, void * arg);
+bool watcher_cmd_q_insert(struct watcher_cmd_q * this, int cmd_id, void * arg);
 
 #endif //GREENEV_CMDQ_H_

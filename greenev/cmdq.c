@@ -1,14 +1,14 @@
 #include "greenev.h"
 
-static void _on_cmd_q_async(struct ev_loop *loop, ev_async *w, int revents);
+static void _on_watcher_cmd_q_async(struct ev_loop *loop, ev_async *w, int revents);
 
 ///
 
-struct cmd_q * cmd_q_new(struct ev_loop *loop, unsigned int size, void (*cmdcallback)(void *, struct cmd), void * callbackarg)
+struct watcher_cmd_q * watcher_cmd_q_new(struct ev_loop *loop, unsigned int size, void (*cmdcallback)(void *, struct cmd), void * callbackarg)
 {
 	assert(size > 0);
 
-	struct cmd_q * this = malloc(sizeof(struct cmd_q) + size * sizeof(struct cmd));
+	struct watcher_cmd_q * this = malloc(sizeof(struct watcher_cmd_q) + size * sizeof(struct cmd));
 
 	this->q_size = size;
 	this->q_head = 0;
@@ -23,15 +23,15 @@ struct cmd_q * cmd_q_new(struct ev_loop *loop, unsigned int size, void (*cmdcall
 	pthread_mutex_init(&this->q_mtx, NULL);
 
 	// Prepare asynch watcher for application command queue
-	ev_async_init(&this->q_watcher, _on_cmd_q_async);
+	ev_async_init(&this->q_watcher, _on_watcher_cmd_q_async);
 	this->q_watcher.data = this;
 
 	return this;
 }
 
-void cmd_q_delete(struct cmd_q * this)
+void watcher_cmd_q_delete(struct watcher_cmd_q * this)
 {
-	cmd_q_stop(this);
+	watcher_cmd_q_stop(this);
 	pthread_mutex_destroy(&this->q_mtx);
 
 	if (this->q_head != this->q_tail)
@@ -44,7 +44,7 @@ void cmd_q_delete(struct cmd_q * this)
 
 ///
 
-void cmd_q_start(struct cmd_q * this)
+void watcher_cmd_q_start(struct watcher_cmd_q * this)
 {
 	ev_async_start(this->loop, &this->q_watcher);
 
@@ -52,14 +52,14 @@ void cmd_q_start(struct cmd_q * this)
 	ev_unref(this->loop);
 }
 
-void cmd_q_stop(struct cmd_q * this)
+void watcher_cmd_q_stop(struct watcher_cmd_q * this)
 {
 	ev_async_stop(this->loop, &this->q_watcher);
 }
 
 ///
 
-bool cmd_q_insert(struct cmd_q * this, int cmd_id, void * arg)
+bool watcher_cmd_q_insert(struct watcher_cmd_q * this, int cmd_id, void * arg)
 {
 	struct cmd new_cmd = {.id = cmd_id, .arg = arg};
 
@@ -86,10 +86,10 @@ bool cmd_q_insert(struct cmd_q * this, int cmd_id, void * arg)
 }
 
 
-static void _on_cmd_q_async(struct ev_loop *loop, ev_async *w, int revents)
+static void _on_watcher_cmd_q_async(struct ev_loop *loop, ev_async *w, int revents)
 {
 	struct cmd cmd;
-	struct cmd_q * this = w->data;
+	struct watcher_cmd_q * this = w->data;
 
 	for(;;)
 	{

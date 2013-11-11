@@ -40,8 +40,7 @@ struct io_thread
 	struct io_thread_established_socket * established;
 
 	// Command queue
-	struct cmd_q * cmd_q;
-
+	struct watcher_cmd_q * cmd_q;
 
 	struct io_buffer * tmp_io_buf; //This is just temporary location
 };
