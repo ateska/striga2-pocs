@@ -34,4 +34,4 @@ nosetests.xml
 .pydevproject
 *.o
 greenev/greenev
-greenev/tests
+greenev/tests/unit_tests
