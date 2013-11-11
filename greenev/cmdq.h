@@ -12,6 +12,8 @@ struct watcher_cmd_q
 Watcher-based (libev watcher) command queue.
 It uses ev_async watcher from libev to synchronize producers and consumers.
 This one is useful when processing thread has to handle libev events (e.g. socket or signals)
+
+Implementation is in cmdq_ev.c
 */
 {
 	unsigned int q_size;
@@ -48,6 +50,8 @@ Command queue based on Posix conditional variable.
 
 Synchronization is done purely via Posix condition variables.
 Therefore this is the only element that can feed thread event loop.
+
+Implementation is in cmdq_cv.c
 */
 {
 	unsigned int q_size;
