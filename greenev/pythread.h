@@ -11,5 +11,11 @@ struct py_thread
 void py_thread_ctor(struct py_thread *);
 void py_thread_dtor(struct py_thread *);
 
+void py_thread_die(struct py_thread *);
+
+enum pyt_cmd_ids {
+	pyt_cmd_IO_THREAD_DIE = 1,
+};
+
 
 #endif //GREENEV_PYTHREAD_H_

@@ -87,6 +87,7 @@ It is 'protected' function, should not be called from 'external' object.
 	ev_signal_stop(EV_DEFAULT, &this->_SIGTERM);	
 
 	io_thread_die(&this->io_thread);
+	py_thread_die(&this->py_thread);
 }
 
 

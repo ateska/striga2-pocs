@@ -65,7 +65,15 @@ void py_thread_dtor(struct py_thread * this)
 
 ///
 
-wchar_t *_py_thread_args[] = {L"-m", L"./greenev", L""};
+void py_thread_die(struct py_thread *this)
+{
+	// Insert DIE command in my command queue
+	cond_cmd_q_put(this->cmd_q, pyt_cmd_IO_THREAD_DIE, NULL);
+}
+
+///
+
+wchar_t *_py_thread_args[] = {L"./greenev", L""};
 
 static void * _py_thread_start(void * arg)
 {
@@ -73,7 +81,7 @@ static void * _py_thread_start(void * arg)
 
 	pthread_cleanup_push(_py_thread_cleanup, arg);
 
-	Py_SetProgramName(_py_thread_args[1]);
+	Py_SetProgramName(_py_thread_args[0]);
 	Py_InspectFlag = 1;
 
 	// Ensure that _pygeapi is available
@@ -81,9 +89,9 @@ static void * _py_thread_start(void * arg)
 
 	Py_InitializeEx(0); /* Skip signal initialization */
 
-	PySys_SetArgv(2, _py_thread_args);
+	PySys_SetArgv(1, _py_thread_args);
 
-	PyObject* this_pyobj = PyCapsule_New(this, "py_thread", NULL);
+	PyObject* this_pyobj = PyCapsule_New(this, "struct py_thread *", NULL);
 	PySys_SetObject("pygeapi_py_thread", this_pyobj);
 	Py_DECREF(this_pyobj);
 

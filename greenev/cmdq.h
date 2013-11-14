@@ -50,6 +50,9 @@ Command queue based on Posix conditional variable.
 
 Synchronization is done purely via Posix condition variables.
 Therefore this is the only element that can feed thread event loop.
+However this class supports multiple producers/multiple consumers paradigm,
+therefore event loop can be shared among multiple threads. It works then as
+simple dispatcher/balancer of commads.
 
 Implementation is in cmdq_cv.c
 */
@@ -87,7 +90,7 @@ int cond_cmd_q_timed_get(struct cond_cmd_q *, struct cmd * cmd_out, unsigned int
 Return values:
 -1 - error
 0 - timeout occured (item is not inserted)
-1 - item is successfully inserted into queue
+1 - item is successfully retrieved from queue (and it is now stored in cmd_out)
 */
 
 #endif //GREENEV_CMDQ_H_
