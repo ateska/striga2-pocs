@@ -15,6 +15,8 @@
 
 #include <Python.h>
 
+#include "app.h"
+
 // Logging
 
 int logging_init();

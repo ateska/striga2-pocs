@@ -2,7 +2,6 @@
 
 int main(int argc, char **argv)
 {
-	int ret = 99;
 	struct application app;
 
 	assert(ev_version_major() == EV_VERSION_MAJOR);
@@ -11,7 +10,7 @@ int main(int argc, char **argv)
 	logging_init();
 	application_ctor(&app, argc, argv);
 
-	ret = application_run(&app);
+	int ret = application_run(&app);
 	LOG_INFO("Exiting (exit code: %d)", ret);
 	
 	application_dtor(&app);
