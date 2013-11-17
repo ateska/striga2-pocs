@@ -1,22 +1,12 @@
 #include "pyglev.h" 
 
-static void event_loop_on_terminating_signal(struct ev_loop *loop, ev_signal *w, int revents);
+static void _event_loop_on_terminating_signal(struct ev_loop *loop, ev_signal *w, int revents);
+static void _event_loop_release(struct ev_loop *loop);
+static void _event_loop_acquire(struct ev_loop *loop);
 
 ///
 
-static void event_loop_release(struct ev_loop *loop)
-{
-    struct event_loop *self = ev_userdata(loop);
-    self->tstate = PyEval_SaveThread();
-}
-
-static void event_loop_acquire(struct ev_loop *loop)
-{
-    struct event_loop *self = ev_userdata(loop);
-    PyEval_RestoreThread(self->tstate);
-}
-
-static PyObject * event_loop_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyObject * event_loop_ctor(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
 	unsigned int flags = EVFLAG_AUTO;
 	static char *kwlist[] = {"flags", NULL};
@@ -40,23 +30,21 @@ static PyObject * event_loop_new(PyTypeObject *type, PyObject *args, PyObject *k
 	ev_set_userdata(self->loop, self);
 
 	// This automagically manipulates Python GIL to release it when loop waiting/sleeping phase is entered and acquired when exited
-	ev_set_loop_release_cb (self->loop, event_loop_release, event_loop_acquire);
+	ev_set_loop_release_cb (self->loop, _event_loop_release, _event_loop_acquire);
 
 	// Create and register SIGINT signal handler
-	ev_signal_init(&self->SIGINT_watcher, event_loop_on_terminating_signal, SIGINT);
+	ev_signal_init(&self->SIGINT_watcher, _event_loop_on_terminating_signal, SIGINT);
 	ev_signal_start(self->loop, &self->SIGINT_watcher);
-	self->SIGINT_watcher.data = self;
 
 	// Create and register SIGTERM signal handler
-	ev_signal_init(&self->SIGTERM_watcher, event_loop_on_terminating_signal, SIGTERM);
+	ev_signal_init(&self->SIGTERM_watcher, _event_loop_on_terminating_signal, SIGTERM);
 	ev_signal_start(self->loop, &self->SIGTERM_watcher);
-	self->SIGTERM_watcher.data = self;
 
 
 	return (PyObject *)self;
 }
 
-static void event_loop_dealloc(struct event_loop * self)
+static void event_loop_dtor(struct event_loop * self)
 {
 	if (self->loop)
 	{
@@ -85,38 +73,46 @@ static PyObject * event_loop_run(struct event_loop *self)
 
 static void _event_loop_die(struct event_loop * this)
 /*
-This function initiates process of application exit.
-It should inform all subcomponents about app termination intention.
+This function initiates process of event loop exit.
+It should inform all subcomponents about its termination intention.
 
-Actual exit is controlled by main event loop, respective by its reference count.
-Whenever this count reaches zero, applicaton will exit.
-Therefore subcomponents should 'manipulate' this reference count in order to prevent
-premature exit.
+Actual exit is controlled by event loop reference count.
+Whenever this count reaches zero, event loop exits.
+Therefore subcomponents should 'manipulate' this reference count in order to prevent premature exit.
 
 It is 'protected' function, should not be called from 'external' object.
 */
 {
-//	if (this->run_phase == app_run_phase_DYING) return;
-//	if (this->run_phase == app_run_phase_EXIT) return;
-
-//	assert(this->run_phase == app_run_phase_RUN);
-//	this->run_phase = app_run_phase_DYING;
-
 	ev_signal_stop(this->loop, &this->SIGINT_watcher);
 	ev_signal_stop(this->loop, &this->SIGTERM_watcher);	
 }
 
 
-static void event_loop_on_terminating_signal(struct ev_loop *loop, ev_signal *w, int revents)
+static void _event_loop_on_terminating_signal(struct ev_loop *loop, ev_signal *w, int revents)
 {
 	if (w->signum == SIGINT)
 	{
 		printf("\n");
 	}
 
-	struct event_loop * self = w->data;
+	struct event_loop * self = ev_userdata(loop);
 	_event_loop_die(self);
 }
+
+///
+
+static void _event_loop_release(struct ev_loop *loop)
+{
+    struct event_loop *self = ev_userdata(loop);
+    self->tstate = PyEval_SaveThread();
+}
+
+static void _event_loop_acquire(struct ev_loop *loop)
+{
+    struct event_loop *self = ev_userdata(loop);
+    PyEval_RestoreThread(self->tstate);
+}
+
 
 /// --- Python type definition follows
 
@@ -131,7 +127,7 @@ PyTypeObject pyglev_core_event_loop_type =
 	"pyglev.core.event_loop",  /* tp_name */
 	sizeof(struct event_loop), /* tp_basicsize */
 	0,                         /* tp_itemsize */
-	(destructor)event_loop_dealloc, /* tp_dealloc */
+	(destructor)event_loop_dtor, /* tp_dealloc */
 	0,                         /* tp_print */
 	0,                         /* tp_getattr */
 	0,                         /* tp_setattr */
@@ -164,5 +160,5 @@ PyTypeObject pyglev_core_event_loop_type =
     0,                         /* tp_dictoffset */
     0,                         /* tp_init */
     0,                         /* tp_alloc */
-    event_loop_new,            /* tp_new */
+    event_loop_ctor,           /* tp_new */
 };
