@@ -25,7 +25,7 @@ void logging_finish();
 
 void LOG_DEBUG(const char *fmt, ...);
 void LOG_INFO(const char *fmt, ...);
-void LOG_WARNING(const char *fmt, ...);
+void LOG_WARN(const char *fmt, ...);
 void LOG_ERROR(const char *fmt, ...);
 void LOG_ERRNO(int errnum, const char *fmt, ...);
 

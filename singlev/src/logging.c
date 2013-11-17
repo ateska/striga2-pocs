@@ -44,7 +44,7 @@ void LOG_DEBUG(const char *fmt, ...)
 }
 
 
-void LOG_WARNING(const char *fmt, ...)
+void LOG_WARN(const char *fmt, ...)
 {
 	char buffer[511];
 	int rc;
