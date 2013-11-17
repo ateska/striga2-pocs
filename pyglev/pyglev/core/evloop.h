@@ -6,6 +6,7 @@ struct event_loop
 	PyObject_HEAD
 
 	struct ev_loop * loop;
+	PyThreadState * tstate;
 
 	ev_signal SIGINT_watcher;
 	ev_signal SIGTERM_watcher;

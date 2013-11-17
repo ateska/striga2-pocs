@@ -4,6 +4,18 @@ static void event_loop_on_terminating_signal(struct ev_loop *loop, ev_signal *w,
 
 ///
 
+static void event_loop_release(struct ev_loop *loop)
+{
+    struct event_loop *self = ev_userdata(loop);
+    self->tstate = PyEval_SaveThread();
+}
+
+static void event_loop_acquire(struct ev_loop *loop)
+{
+    struct event_loop *self = ev_userdata(loop);
+    PyEval_RestoreThread(self->tstate);
+}
+
 static PyObject * event_loop_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
 	unsigned int flags = EVFLAG_AUTO;
@@ -25,6 +37,10 @@ static PyObject * event_loop_new(PyTypeObject *type, PyObject *args, PyObject *k
 		Py_DECREF(self);
 		return NULL;
     }
+	ev_set_userdata(self->loop, self);
+
+	// This automagically manipulates Python GIL to release it when loop waiting/sleeping phase is entered and acquired when exited
+	ev_set_loop_release_cb (self->loop, event_loop_release, event_loop_acquire);
 
 	// Create and register SIGINT signal handler
 	ev_signal_init(&self->SIGINT_watcher, event_loop_on_terminating_signal, SIGINT);
