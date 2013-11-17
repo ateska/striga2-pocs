@@ -81,6 +81,8 @@ static void event_loop_dtor(struct event_loop * self)
     {
 		cmd_q_delete(self->cmd_q);
 	}
+
+	Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
 
