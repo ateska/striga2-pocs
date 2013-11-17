@@ -1,6 +1,6 @@
 CFLAGS:=-O0 -Wall -ggdb $(shell python3-config --cflags)
 CFLAGS:=$(filter-out -O3 -g -DNDEBUG,$(CFLAGS)) # Filter out Python flags
-LDLIBS=-lev $(shell python3-config --libs --ldflags)
+LDLIBS+=-lev $(shell python3-config --libs --ldflags)
 
 .PHONY: clean all rebuild subdirs
 
@@ -24,5 +24,5 @@ clean:
 
 ${BIN}: ${OBJS}
 	@echo " [LD]" $@
-	@$(LINK.o) $^ $(LOADLIBES) $(LDLIBS) -o $@
+	@$(LINK.o) $^ ${UTOBJS} $(LOADLIBES) $(LDLIBS) -o $@
 
