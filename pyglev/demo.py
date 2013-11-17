@@ -6,7 +6,7 @@ import pyglev
 class demo_app(pyglev.application):
 
 	def on_init(self):
-		pass
+		self.listen('localhost', 7777)
 
 
 if __name__ == '__main__':
