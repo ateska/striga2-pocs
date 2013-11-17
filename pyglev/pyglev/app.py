@@ -6,25 +6,29 @@ from . import core
 class application(object):
 
 	# Events
-	def on_init(self): pass
-	def on_exit(self): pass
+	on_init = None # def on_init(self):
+	on_exit = None # def on_exit(self):
+
+	#TODO: Following callback
+	on_break = None # def on_break(self):
 
 
 	def __init__(self):
 		self.exit_code = 0
 		self.event_loop = core.event_loop()
 
-		self.on_init()
+		if (self.on_init is not None): self.on_init()
 
 
 	def run(self):
 		self.event_loop.run()
 
-		self.on_exit()
+		if (self.on_exit is not None): self.on_exit()
 
 		print("Application exit (exit code={})".format(self.exit_code))
 		sys.exit(self.exit_code)
 
 
 	def listen(self, host, port, backlog=10):
-		print("Method {}.listen() not implemented".format(application.__name__))
+		return self.event_loop.listen(host, str(port), backlog)
+

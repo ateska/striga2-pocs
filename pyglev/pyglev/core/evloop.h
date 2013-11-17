@@ -8,6 +8,8 @@ struct event_loop
 	struct ev_loop * loop;
 	PyThreadState * tstate;
 
+	struct cmd_q * cmd_q;
+
 	ev_signal SIGINT_watcher;
 	ev_signal SIGTERM_watcher;
 };

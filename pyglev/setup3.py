@@ -7,6 +7,7 @@ pyglev_core = Extension('pyglev.core',
 	sources = [
 		'pyglev/core/core.c',
 		'pyglev/core/evloop.c',
+		'pyglev/core/cmdq.c',
 	]
 )
 
