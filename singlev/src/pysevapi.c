@@ -23,27 +23,6 @@ static PyObject * _pysevapi_application_run(PyObject *self, PyObject *args)
 
 ///
 
-/*
-static bool _pysevapi_add_type(PyObject *module, const char *name, PyTypeObject *type)
-{
-	if (PyType_Ready(type))
-	{
-		return false;
-	}
-
-	Py_INCREF(type);
-	if (PyModule_AddObject(module, name, (PyObject *)type))
-	{
-		Py_DECREF(type);
-		return false;
-	}
-
-	return true;
-}
-*/
-
-///
-
 static PyMethodDef _pysevapi_methods[] = 
 {
 	{"application_run", _pysevapi_application_run, METH_VARARGS, "Enter application-wide event loop."},
@@ -66,7 +45,7 @@ PyObject* pysevapi_init()
 		goto finish_decref;
 	}
 
-//	if (!_pysevapi_add_type(m, "application", &applicationType))
+//	if (!_pyutils_add_type(m, "application", &applicationType))
 //		goto finish_decref;
 
 	return m;

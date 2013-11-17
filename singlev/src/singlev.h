@@ -34,4 +34,6 @@ void LOG_ERRNO(int errnum, const char *fmt, ...);
 
 PyObject* pysevapi_init();
 
+bool _pyutils_run_module(wchar_t *modname, int set_argv0);
+
 #endif ///SINGLEV_H_
