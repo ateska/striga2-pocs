@@ -10,4 +10,7 @@ It already proved that:
 
 Another PoC should explore single thread (no thread) libev-based C application integrated with Python.
 
+See:
 
+-  singlev (embed Python interpretter with libev - aborted Poc)
+-  pyglev (Python 3 module that integrates libev event loop with greenlets)
