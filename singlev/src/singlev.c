@@ -11,7 +11,7 @@ int main(int argc, char **argv)
 	logging_init();
 	application_ctor(&app, argc, argv);
 
-	ret = application_run(&app);
+	ret = application_start(&app);
 	LOG_INFO("Exiting (exit code: %d)", ret);
 
 	application_dtor(&app);

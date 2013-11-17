@@ -1,16 +1,24 @@
 #include "singlev.h"
 
 struct application * app = NULL;
+static wchar_t *_application_python_args[] = {L"./singlev", L""};
 
 static void _on_terminating_signal(struct ev_loop *loop, ev_signal *w, int revents);
+
+static bool _python_run_module(wchar_t *modname, int set_argv0);
 
 ///
 
 void application_ctor(struct application * this, int argc, char **argv)
 {
 	assert(app == NULL);
+	assert(Py_IsInitialized() == 0);
+
 	app = this;
 
+	this->established_ev_sockets = NULL;
+	this->listening_ev_sockets = NULL;
+	this->python_thread_state = NULL;
 	this->run_phase = app_run_phase_INIT;
 	this->exit_status = EXIT_SUCCESS;
 
@@ -31,11 +39,30 @@ void application_ctor(struct application * this, int argc, char **argv)
 	ev_signal_init(&this->_SIGTERM, _on_terminating_signal, SIGTERM);
 	ev_signal_start(EV_DEFAULT, &this->_SIGTERM);
 	this->_SIGTERM.data = this;
+
+	// Configure Python interpreter
+	Py_SetProgramName(_application_python_args[0]);
+	Py_InspectFlag = 1;
+
+	// Ensure that embed API is available
+	PyImport_AppendInittab(PYSEVAPI_MODULE, &pysevapi_init);
+
+	// Initialize Python interpreter
+	Py_InitializeEx(0); // 0 to skip signal initialization
+	PySys_SetArgv(1, _application_python_args);
+
+	PySys_ResetWarnOptions();
+
 }
 
 
 void application_dtor(struct application * this)
 {
+	assert(this->python_thread_state == NULL);
+
+	// Finalize Python interpreter
+	Py_Finalize();
+
 	this->run_phase = app_run_phase_EXIT;
 
 	ev_signal_stop(EV_DEFAULT, &this->_SIGINT);
@@ -59,6 +86,10 @@ premature exit.
 It is 'protected' function, should not be called from 'external' object.
 */
 {
+	if (this->run_phase == app_run_phase_DYING) return;
+	if (this->run_phase == app_run_phase_EXIT) return;
+
+	assert(this->run_phase == app_run_phase_RUN);
 	this->run_phase = app_run_phase_DYING;
 
 	ev_signal_stop(EV_DEFAULT, &this->_SIGINT);
@@ -79,18 +110,84 @@ static void _on_terminating_signal(struct ev_loop *loop, ev_signal *w, int reven
 
 ///
 
-int application_run(struct application * this)
+int application_start(struct application * this)
 {
 	this->run_phase = app_run_phase_RUN;
 	LOG_INFO("Application is up and running");
 
+	_python_run_module(L"demo", 1);
+
+	// Ensure that we are dying properly ...
+	_application_die(this);
+
+	return this->exit_status;
+}
+
+void application_run(struct application * this)
+// This method is called from Python interpretter
+{
 	// Start event loop
 	for(bool keep_running=true; keep_running;)
 	{
 		keep_running = ev_run(EV_DEFAULT, 0);
 	}
-
-	return this->exit_status;
 }
 
 ///
+
+static bool _python_run_module(wchar_t *modname, int set_argv0)
+{
+	PyObject *module, *runpy, *runmodule, *runargs, *result;
+
+	runpy = PyImport_ImportModule("runpy");
+	if (runpy == NULL)
+	{
+		LOG_ERROR("Could not import runpy module");
+		return false;
+	}
+
+	runmodule = PyObject_GetAttrString(runpy, "_run_module_as_main");
+	if (runmodule == NULL)
+	{
+		LOG_ERROR("Could not access runpy._run_module_as_main");
+		Py_DECREF(runpy);
+		return false;
+	}
+
+	module = PyUnicode_FromWideChar(modname, wcslen(modname));
+	if (module == NULL)
+	{
+		LOG_ERROR("Could not convert module name to unicode");
+		Py_DECREF(runpy);
+		Py_DECREF(runmodule);
+		return false;
+	}
+
+	runargs = Py_BuildValue("(Oi)", module, set_argv0);
+	if (runargs == NULL)
+	{
+		LOG_ERROR("Could not create arguments for runpy._run_module_as_main");
+		Py_DECREF(runpy);
+		Py_DECREF(runmodule);
+		Py_DECREF(module);
+		return false;
+	}
+
+	result = PyObject_Call(runmodule, runargs, NULL);
+	if (result == NULL)
+	{
+		PyErr_Print();
+	}
+
+	Py_DECREF(runpy);
+	Py_DECREF(runmodule);
+	Py_DECREF(module);
+	Py_DECREF(runargs);
+	if (result == NULL)
+	{
+		return false;
+	}
+	Py_DECREF(result);
+
+	return true;
+}
