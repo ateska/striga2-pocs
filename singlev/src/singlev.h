@@ -10,12 +10,16 @@
 #include <time.h>
 #include <errno.h>
 #include <sys/socket.h>
+#include <netdb.h>
+
+#include <pthread.h>
 
 #include <ev.h>
 
 #include <Python.h>
 
 #include "evsock.h"
+#include "cmdq.h"
 #include "app.h"
 
 // Logging

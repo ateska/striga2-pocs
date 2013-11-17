@@ -1,5 +1,5 @@
 BIN=../singlev
-OBJS=singlev.o app.o logging.o pysevapi.o pyutils.o
+OBJS=singlev.o app.o logging.o pysevapi.o pyutils.o cmdq.o
 
 all: $(BIN)
 
