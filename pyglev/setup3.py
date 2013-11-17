@@ -2,6 +2,14 @@
 
 from distutils.core import setup, Extension
 
+pyglev_core = Extension('pyglev.core',
+	libraries = ['ev'],
+	sources = [
+		'pyglev/core/core.c',
+		'pyglev/core/evloop.c',
+	]
+)
+
 setup(
 	name='PyGLEV',
 	version='1.0',
@@ -10,5 +18,5 @@ setup(
 	author_email='ales.teska+striga@gmail.com',
 	url='https://github.com/ateska/striga2-pocs',
 	packages=['pyglev'],
-	ext_modules=[Extension('pyglev.core', ['pyglev/core/core.c'])],
+	ext_modules=[pyglev_core],
 )
