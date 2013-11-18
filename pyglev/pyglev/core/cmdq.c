@@ -55,11 +55,11 @@ void cmd_q_stop(struct cmd_q * this, struct ev_loop *loop)
 
 ///
 
-bool cmd_q_put(struct cmd_q * this, struct ev_loop *loop, int cmd_id, void * data)
+bool cmd_q_put(struct cmd_q * this, struct ev_loop *loop, int cmd_id, PyObject * subject)
 {
 	if (!ev_is_active(&this->watcher)) return false;
 
-	struct cmd new_cmd = {.id = cmd_id, .data = data};
+	struct cmd new_cmd = {.id = cmd_id, .subject = subject};
 
 	// Critical (synchronised) section
 	pthread_mutex_lock(&this->mutex);

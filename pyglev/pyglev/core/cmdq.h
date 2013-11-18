@@ -4,7 +4,7 @@
 struct cmd
 {
 	int id;
-	void * data;
+	PyObject * subject;
 };
 
 struct cmd_q
@@ -34,7 +34,7 @@ void cmd_q_start(struct cmd_q *, struct ev_loop *loop); /* The same sence as lib
 void cmd_q_stop(struct cmd_q *, struct ev_loop *loop); /* Is also implicty called by destructor */
 
 // This method is callable from other threads
-bool cmd_q_put(struct cmd_q *, struct ev_loop *loop, int cmd_id, void * data);
+bool cmd_q_put(struct cmd_q * this, struct ev_loop *loop, int cmd_id, PyObject * subject);
 
 int cmd_q_get(struct cmd_q *, struct cmd * out_cmd);
 
