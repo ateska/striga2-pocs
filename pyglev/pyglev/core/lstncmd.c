@@ -46,6 +46,7 @@ void _listen_cmd_xschedule_01(struct listen_cmd * self, struct event_loop * even
 	bool failure = false;
 
 
+	//TODO: Asynchronous resolve
 	// Resolve address/port into IPv4/IPv6 address infos
 	struct addrinfo req, *ans;
 	req.ai_family = AF_UNSPEC; // Both IPv4 and IPv6 if available
