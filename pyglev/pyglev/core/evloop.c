@@ -2,8 +2,6 @@
 
 static void _event_loop_on_break_signal(struct ev_loop *loop, ev_signal *w, int revents);
 static void _event_loop_on_cmdq_ready(struct ev_loop *loop, ev_async *w, int revents);
-static void _event_loop_release(struct ev_loop *loop);
-static void _event_loop_acquire(struct ev_loop *loop);
 
 ///
 
@@ -34,9 +32,6 @@ static PyObject * event_loop_ctor(PyTypeObject *type, PyObject *args, PyObject *
 		return NULL;
     }
 	ev_set_userdata(self->loop, self);
-
-	// This automagically manipulates Python GIL to release it when loop waiting/sleeping phase is entered and acquired when exited
-	ev_set_loop_release_cb (self->loop, _event_loop_release, _event_loop_acquire);
 
 
 	// Create command queue
@@ -90,11 +85,17 @@ static PyObject * event_loop_run(struct event_loop *self)
 {
 	bool keep_running=true;
 
+	// Release Python GIL
+	self->tstate = PyEval_SaveThread();
+
 	// Start event loop
 	while(keep_running)
 	{
 		keep_running = ev_run(self->loop, 0);
 	}
+
+	// Acquire Python GIL
+	PyEval_RestoreThread(self->tstate);
 
 	Py_RETURN_NONE;
 }
@@ -133,6 +134,7 @@ static void _event_loop_on_cmdq_ready(struct ev_loop *loop, ev_async *w, int rev
 {
 	struct cmd_q * cmd_q = w->data;
 	struct cmd cmd;
+	struct event_loop * self = ev_userdata(loop);
 
 	while (true)
 	{
