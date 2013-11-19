@@ -22,6 +22,7 @@ static PyObject * listen_cmd_ctor(PyTypeObject *type, PyObject *args, PyObject *
 	else self->host = strdup(host);
 	self->port = strdup(port);
 	self->backlog = backlog;
+	self->status = listen_cmd_status_INIT;
 
 	return (PyObject *)self;
 }
@@ -172,6 +173,7 @@ static PyMemberDef listen_cmd_members[] = {
 	{"host", T_STRING, offsetof(struct listen_cmd, host), 0, "Host name used for listening"},
 	{"port", T_STRING, offsetof(struct listen_cmd, port), 0, "Port name used for listening"},
 	{"backlog", T_INT, offsetof(struct listen_cmd, backlog), 0, "Size of listen backlog"},
+	{"status", T_CHAR, offsetof(struct listen_cmd, status), 0, "Status of listen command"},
 	{NULL}  /* Sentinel */
 };
 
