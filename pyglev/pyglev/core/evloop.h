@@ -3,6 +3,12 @@
 
 struct event_loop
 {
+/* Public Methods:
+	run()
+	schedule()
+	_xschedule()
+*/
+
 	PyObject_HEAD
 
 	struct ev_loop * loop;
@@ -15,6 +21,5 @@ struct event_loop
 };
 
 extern PyTypeObject pyglev_core_event_loop_type;
-
 
 #endif //PYGLEV_EVLOOP_H_

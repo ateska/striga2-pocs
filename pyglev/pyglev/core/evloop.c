@@ -142,51 +142,115 @@ static void _event_loop_on_cmdq_ready(struct ev_loop *loop, ev_async *w, int rev
 		if (qsize < 0) break;
 		//struct event_loop * this = cmd_q->data;
 
-		printf("Got command %d - %d\n", cmd.id, qsize);
+		switch (cmd.id)
+		{
+			case pyglev_evloop_cmd_CALLABLE:
+			{
+				// Acquire Python GIL
+				PyEval_RestoreThread(self->tstate);
+
+				PyObject * args = PyTuple_New(0);
+
+				PyObject * res = PyObject_CallObject(cmd.subject, args);
+				if (res == NULL)
+				{
+					PyErr_Print();
+				} else {
+					Py_DECREF(res); // Throw result away
+				}
+
+				Py_DECREF(args);
+
+				// We don't need to own reference to cmd.subject anymore
+				Py_DECREF(cmd.subject);
+
+				// Release Python GIL
+				self->tstate = PyEval_SaveThread();
+			}
+			break;
+
+
+			case pyglev_evloop_cmd_LISTEN_CMD_01:
+			{
+				_listen_cmd_xschedule_01((struct listen_cmd *)cmd.subject, self);
+			}
+			break;
+
+
+			default:
+				PyEval_RestoreThread(self->tstate);
+
+				// Set exception
+				PyObject * msg = PyUnicode_FromFormat("Unknown command id: %d", cmd.id);
+				PyErr_SetObject(PyExc_RuntimeError, msg);
+				Py_DECREF(msg);
+
+				// Print exception
+				PyErr_WriteUnraisable(NULL);
+
+				self->tstate = PyEval_SaveThread();
+		}
 
 		if (qsize == 0) break; // This was last command in the queue, quit and save one mutex lock
 	}
 
-	printf("Done\n");
 }
 
 
-static PyObject * event_loop_listen(struct event_loop *self, PyObject *args)
+static PyObject * event_loop_schedule(struct event_loop *self, PyObject *args)
 {
-	const char *hostname;
-	const char *port;
-	int backlog;
+	PyObject * callable;
 
-	if (!PyArg_ParseTuple(args, "ssi", &hostname, &port, &backlog)) return NULL;
+	if (!PyArg_ParseTuple(args, "O:schedule", &callable)) return NULL;
 
-	//TODO: This ...
-	printf("Listen on %s %s %d\n", hostname, port, backlog);
-	cmd_q_put(self->cmd_q, self->loop, 2, NULL);
+	bool ret = cmd_q_put(self->cmd_q, self->loop, pyglev_evloop_cmd_CALLABLE, callable);
+	if (!ret)
+	{
+		PyErr_SetString(PyExc_RuntimeError, "Command queue is refusing new commands");
+		return NULL;
+	}
+
+	Py_INCREF(callable);
 
 	Py_RETURN_NONE;
 }
 
 
-/// Helpers that manipulates Python GIL prior and after event loop enters waiting/sleeping phase
-
-static void _event_loop_release(struct ev_loop *loop)
+static PyObject * event_loop_xschedule(struct event_loop *self, PyObject *args)
 {
-    struct event_loop *self = ev_userdata(loop);
-    self->tstate = PyEval_SaveThread();
-}
+	PyObject * callable;
 
-static void _event_loop_acquire(struct ev_loop *loop)
-{
-    struct event_loop *self = ev_userdata(loop);
-    PyEval_RestoreThread(self->tstate);
-}
+	if (!PyArg_ParseTuple(args, "O:xschedule", &callable)) return NULL;
 
+	int cmdid = -1;
+	if (PyObject_TypeCheck(callable, &pyglev_core_listen_cmd_type))
+	{
+		cmdid = pyglev_evloop_cmd_LISTEN_CMD_01;
+	} else {
+		PyErr_SetString(PyExc_RuntimeError, "There is no extended scheduling for this object");
+		return NULL;		
+	}
+
+	assert(cmdid != -1);
+
+	bool ret = cmd_q_put(self->cmd_q, self->loop, cmdid, callable);
+	if (!ret)
+	{
+		PyErr_SetString(PyExc_RuntimeError, "Command queue is refusing new commands");
+		return NULL;
+	}
+
+	Py_INCREF(callable);
+
+	Py_RETURN_NONE;
+}
 
 /// --- Python type definition follows
 
 static PyMethodDef event_loop_methods[] = {
 	{"run", (PyCFunction)event_loop_run, METH_NOARGS, "Enter event loop."},
-	{"listen", (PyCFunction)event_loop_listen, METH_VARARGS, "Start listening on given host interface and port."},
+	{"schedule", (PyCFunction)event_loop_schedule, METH_VARARGS, "Add callable to command queue."},
+	{"_xschedule", (PyCFunction)event_loop_xschedule, METH_VARARGS, "Add 'special' object to command queue"},
     {NULL}  /* Sentinel */
 };
 

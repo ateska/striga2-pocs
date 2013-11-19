@@ -31,3 +31,4 @@ class application(object):
 
 	def listen(self, host, port, backlog=10):
 		cmd = core.listen_cmd(host, str(port), backlog=backlog)
+		self.event_loop._xschedule(cmd)
