@@ -30,5 +30,4 @@ class application(object):
 
 
 	def listen(self, host, port, backlog=10):
-		return self.event_loop.listen(host, str(port), backlog)
-
+		cmd = core.listen_cmd(host, str(port), backlog=backlog)

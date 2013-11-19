@@ -8,6 +8,7 @@ pyglev_core = Extension('pyglev.core',
 		'pyglev/core/core.c',
 		'pyglev/core/evloop.c',
 		'pyglev/core/cmdq.c',
+		'pyglev/core/lstncmd.c',
 	]
 )
 
