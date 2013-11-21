@@ -1,5 +1,7 @@
 #include "pyglev.h" 
 
+static void _on_listen_accept(struct ev_loop *loop, struct ev_io *watcher, int revents);
+///
 
 static PyObject * listen_cmd_ctor(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
@@ -24,12 +26,23 @@ static PyObject * listen_cmd_ctor(PyTypeObject *type, PyObject *args, PyObject *
 	self->backlog = backlog;
 	self->status = listen_cmd_status_INIT;
 
+	self->watchers = NULL;
+
 	return (PyObject *)self;
 }
 
 
 static void listen_cmd_dtor(struct listen_cmd * self)
 {
+	if (self->watchers)
+	{
+		for (int i=0; i<self->watchers_count; i++)
+		{
+			if (ev_is_active(&self->watchers[i])) printf("Watchers are active when listen command destructs!\n");
+		}
+		free(self->watchers);
+	}
+
 	if (self->host) free(self->host);
 	free(self->port);
 
@@ -46,6 +59,7 @@ void _listen_cmd_xschedule_01(struct listen_cmd * self, struct event_loop * even
 	int rc, i;
 	bool failure = false;
 
+	self->status = listen_cmd_status_RESOLVING;
 
 	//TODO: Asynchronous resolve
 	// Resolve address/port into IPv4/IPv6 address infos
@@ -58,20 +72,22 @@ void _listen_cmd_xschedule_01(struct listen_cmd * self, struct event_loop * even
 	rc = getaddrinfo(self->host, self->port, &req, &ans);
 	if (rc != 0)
 	{
-		printf("Failed to resolve listen address: (%d) %s [%s %s]\n", rc, gai_strerror(rc), self->host, self->port);
+		_event_loop_error(event_loop, 
+			(PyObject *) self, pyglev_error_type_EAI, rc, 
+			"resolving listen address %s (port %s): %s", 
+			self->host, self->port, gai_strerror(rc)
+		);
 		return;
 	}
 
 
-	size_t count = 0;
+	self->watchers_count = 0;
 	for (struct addrinfo *rp = ans; rp != NULL; rp = rp->ai_next)
-	{
-		count += 1;
-	}
+		self->watchers_count += 1;
 
 
-	int listen_socket[count];
-	for (i=0; i<count; i++) listen_socket[i] = -1;
+	int listen_socket[self->watchers_count];
+	for (i=0; i<self->watchers_count; i++) listen_socket[i] = -1;
 
 
 	i=0;
@@ -125,41 +141,65 @@ void _listen_cmd_xschedule_01(struct listen_cmd * self, struct event_loop * even
 		}
 	}
 
-
+	self->watchers = calloc(self->watchers_count, sizeof(ev_io));
 	i=0;
 	for (struct addrinfo *rp = ans; rp != NULL; rp = rp->ai_next, i++)
 	{
-/*		struct io_thread_listening_socket * new_sockobj = malloc(sizeof(struct io_thread_listening_socket));
-		new_sockobj->next = NULL;
-		ev_io_init(&new_sockobj->watcher, _on_io_thread_accept, listen_socket[i], EV_READ);
-		new_sockobj->io_thread = this;
-		new_sockobj->watcher.data = new_sockobj;
-		new_sockobj->domain = rp->ai_family;
-		new_sockobj->type = rp->ai_socktype;
-		new_sockobj->protocol = rp->ai_protocol;
-		memcpy(&new_sockobj->address, rp->ai_addr, rp->ai_addrlen);
-		new_sockobj->address_len = rp->ai_addrlen;
+		ev_io_init(&self->watchers[i], _on_listen_accept, listen_socket[i], EV_READ);
+		self->watchers[i].data = self;
+		// new_sockobj->domain = rp->ai_family;
+		// new_sockobj->type = rp->ai_socktype;
+		// new_sockobj->protocol = rp->ai_protocol;
 
-		watcher_cmd_q_put(this->cmd_q, iot_cmd_IO_THREAD_LISTEN, new_sockobj);*/
+		// memcpy(&new_sockobj->address, rp->ai_addr, rp->ai_addrlen);
+		// new_sockobj->address_len = rp->ai_addrlen;
+
+		ev_io_start(event_loop->loop, &self->watchers[i]);
 	}
 
+	self->status = listen_cmd_status_LISTENING;
 
 end_freeaddrinfo:
 	freeaddrinfo(ans);
 
 	if (failure)
 	{
-		for (i=0; i<count; i++)
+		for (i=0; i<self->watchers_count; i++)
 		{
 			if (listen_socket[i] >= 0) close(listen_socket[i]);
 		}
 	}
+}
 
-	//TODO: Reference count can be left un-decremented when its reference is added to event_loop (under active commands or so ...)
-	//This actually save GIL acquire/release cycle, so it is virtually good thing to do
-	PyEval_RestoreThread(event_loop->tstate);
-	Py_DECREF(self);
-	event_loop->tstate = PyEval_SaveThread();
+void _listen_cmd_close(struct listen_cmd * self, struct event_loop * event_loop)
+{
+	int res;
+
+	if ((self->status == listen_cmd_status_INIT) || (self->status == listen_cmd_status_RESOLVING))
+	{
+		self->status = listen_cmd_status_CLOSED;
+		return; // Do nothing when not initialized
+	}
+
+	if (self->status != listen_cmd_status_LISTENING)
+		fprintf(stderr, "Unexpected status '%c' in listen command\n", self->status);
+
+	if (self->watchers)
+	{
+		for (int i=0; i<self->watchers_count; i++)
+		{
+			ev_io_stop(event_loop->loop, &self->watchers[i]);
+			res = close(self->watchers[i].fd);
+			if (res != 0) fprintf(stderr, "Error when closing listen socket!\n");
+		}
+	}	
+
+	self->status = listen_cmd_status_CLOSED;
+}
+
+
+static void _on_listen_accept(struct ev_loop *loop, struct ev_io *watcher, int revents)
+{
 
 }
 

@@ -21,7 +21,7 @@ static PyObject * event_loop_ctor(PyTypeObject *type, PyObject *args, PyObject *
 	// Create self
 	struct event_loop *self = (struct event_loop *)type->tp_alloc(type, 0);
 	if (self == NULL) return NULL;
-
+	self->listen_commands = NULL;
 
 	// Create event loop
 	self->loop = ev_loop_new(flags);
@@ -115,6 +115,11 @@ It is 'protected' function, should not be called from 'external' object.
 {
 	if ev_is_active(&self->SIGINT_watcher) ev_signal_stop(self->loop, &self->SIGINT_watcher);
 	if ev_is_active(&self->SIGTERM_watcher) ev_signal_stop(self->loop, &self->SIGTERM_watcher);
+
+	for (struct listen_cmd * listen_cmd = self->listen_commands; listen_cmd!=NULL; self->listen_commands=listen_cmd=listen_cmd->next)
+	{
+		_listen_cmd_close(listen_cmd, self);
+	}
 }
 
 
@@ -172,10 +177,16 @@ static void _event_loop_on_cmdq_ready(struct ev_loop *loop, ev_async *w, int rev
 
 			case pyglev_evloop_cmd_LISTEN_CMD_01:
 			{
-				_listen_cmd_xschedule_01((struct listen_cmd *)cmd.subject, self);
+				struct listen_cmd * listen_cmd = (struct listen_cmd *)cmd.subject;
+				
+				// Add it to my listen commands list
+				listen_cmd->next = self->listen_commands;
+				self->listen_commands = listen_cmd;
+
+				// Execute first step in xschedule
+				_listen_cmd_xschedule_01(listen_cmd, self);
 			}
 			break;
-
 
 			default:
 				PyEval_RestoreThread(self->tstate);

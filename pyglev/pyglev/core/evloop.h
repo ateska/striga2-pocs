@@ -18,8 +18,17 @@ struct event_loop
 
 	ev_signal SIGINT_watcher;
 	ev_signal SIGTERM_watcher;
+
+	PyObject * on_error;
+
+	struct listen_cmd * listen_commands;
 };
 
+// Used to propagate error into application
+// PROTECTED / should be only called from thread that owns event_loop / will acquire GIL
+void _event_loop_error(struct event_loop *, PyObject * subject, int error_type, int error_code, const char * restrict format, ...);
+
 extern PyTypeObject pyglev_core_event_loop_type;
+
 
 #endif //PYGLEV_EVLOOP_H_
