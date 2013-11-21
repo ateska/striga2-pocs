@@ -31,6 +31,16 @@ static PyObject * listen_cmd_ctor(PyTypeObject *type, PyObject *args, PyObject *
 	return (PyObject *)self;
 }
 
+static int listen_cmd_tp_clear(struct listen_cmd *self)
+{
+    return 0;
+}
+
+static int listen_cmd_tp_traverse(struct listen_cmd *self, visitproc visit, void *arg)
+{
+    return 0;
+}
+
 
 static void listen_cmd_dtor(struct listen_cmd * self)
 {
@@ -38,7 +48,8 @@ static void listen_cmd_dtor(struct listen_cmd * self)
 	{
 		for (int i=0; i<self->watchers_count; i++)
 		{
-			if (ev_is_active(&self->watchers[i])) printf("Watchers are active when listen command destructs!\n");
+			if (ev_is_active(&self->watchers[i])) 
+				fprintf(stderr, "Watchers are active when listen command destructs!\n");
 		}
 		free(self->watchers);
 	}
@@ -46,9 +57,10 @@ static void listen_cmd_dtor(struct listen_cmd * self)
 	if (self->host) free(self->host);
 	free(self->port);
 
+	listen_cmd_tp_clear(self);
 	Py_TYPE(self)->tp_free((PyObject *)self);
 
-	printf("DEBUG: listen_cmd_dtor()\n");
+//	printf("DEBUG: listen_cmd_dtor()\n");
 }
 
 
@@ -238,10 +250,10 @@ PyTypeObject pyglev_core_listen_cmd_type =
 	0,                         /* tp_getattro */
 	0,                         /* tp_setattro */
 	0,                         /* tp_as_buffer */
-	Py_TPFLAGS_DEFAULT,        /* tp_flags */
+	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC, /* tp_flags */
 	0,                         /* tp_doc */
-    0,                         /* tp_traverse */
-    0,                         /* tp_clear */
+    (traverseproc)listen_cmd_tp_traverse,    /* tp_traverse */
+    (inquiry)listen_cmd_tp_clear,            /* tp_clear */
     0,                         /* tp_richcompare */
     0,                         /* tp_weaklistoffset */
     0,                         /* tp_iter */

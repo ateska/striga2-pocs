@@ -3,6 +3,10 @@ from . import core
 
 ###
 
+def _on_error(subject, error_type, error_code, error_msg):
+	print("Error callback called:", subject, error_type, error_code, error_msg)
+
+
 class application(object):
 
 	# Events
@@ -16,15 +20,17 @@ class application(object):
 	def __init__(self):
 		self.exit_code = 0
 		self.event_loop = core.event_loop()
-		self.event_loop.on_error = self.on_error
+		self.event_loop.on_error = _on_error
 
 		if (self.on_init is not None): self.on_init()
 
 
 	def run(self):
-		self.event_loop.run()
+		try:
+			self.event_loop.run()
 
-		if (self.on_exit is not None): self.on_exit()
+		finally:
+			if (self.on_exit is not None): self.on_exit()
 
 		print("Application exit (exit code={})".format(self.exit_code))
 		sys.exit(self.exit_code)
@@ -34,6 +40,3 @@ class application(object):
 		cmd = core.listen_cmd(host, str(port), backlog=backlog)
 		self.event_loop._xschedule(cmd)
 
-
-	def on_error(self, subject, error_type, error_code, error_msg):
-		print("Error callback called:", subject, error_type, error_code, error_msg)

@@ -21,11 +21,11 @@ struct listen_cmd
 };
 
 // Scheduler shortcuts
-// PROTECTED / should be called only by relevant event loop
+// PROTECTED / should be called only from event loop that owns this command
 void _listen_cmd_xschedule_01(struct listen_cmd *, struct event_loop * event_loop);
 
 // Initiate termination
-// PROTECTED / should be called only by relevant event loop
+// PROTECTED / should be called only from event loop that owns this command
 void _listen_cmd_close(struct listen_cmd *, struct event_loop * event_loop);
 
 enum listen_cmd_statuses

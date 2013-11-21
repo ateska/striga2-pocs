@@ -64,20 +64,26 @@ static PyObject * event_loop_ctor(PyTypeObject *type, PyObject *args, PyObject *
 static int event_loop_tp_clear(struct event_loop *self)
 {
 	Py_CLEAR(self->on_error);
+	for (struct listen_cmd * listen_cmd = self->listen_commands; listen_cmd!=NULL; self->listen_commands=listen_cmd=listen_cmd->next)
+	{
+		Py_CLEAR(listen_cmd);
+	}
     return 0;
 }
 
 static int event_loop_tp_traverse(struct event_loop *self, visitproc visit, void *arg)
 {
     Py_VISIT(self->on_error);
+	for (struct listen_cmd * listen_cmd = self->listen_commands; listen_cmd!=NULL; self->listen_commands=listen_cmd=listen_cmd->next)
+	{
+		Py_VISIT(listen_cmd);
+	}
     return 0;
 }
 
 
 static void event_loop_dtor(struct event_loop * self)
 {
-	printf("DEBUG: event_loop_dtor()\n");
-
 	if (self->loop)
 	{
 		if ev_is_active(&self->SIGINT_watcher) ev_signal_stop(self->loop, &self->SIGINT_watcher);
@@ -96,6 +102,8 @@ static void event_loop_dtor(struct event_loop * self)
 
 	event_loop_tp_clear(self);
 	Py_TYPE(self)->tp_free((PyObject *)self);
+
+	//printf("DEBUG: event_loop_dtor()\n");
 }
 
 
@@ -134,10 +142,18 @@ It is 'protected' function, should not be called from 'external' object.
 	if ev_is_active(&self->SIGINT_watcher) ev_signal_stop(self->loop, &self->SIGINT_watcher);
 	if ev_is_active(&self->SIGTERM_watcher) ev_signal_stop(self->loop, &self->SIGTERM_watcher);
 
+	// Acquire Python GIL
+	PyEval_RestoreThread(self->tstate);
+
 	for (struct listen_cmd * listen_cmd = self->listen_commands; listen_cmd!=NULL; self->listen_commands=listen_cmd=listen_cmd->next)
 	{
 		_listen_cmd_close(listen_cmd, self);
+		Py_DECREF(listen_cmd);
 	}
+
+	// Release Python GIL
+	self->tstate = PyEval_SaveThread();
+
 }
 
 
@@ -205,6 +221,7 @@ static void _event_loop_on_cmdq_ready(struct ev_loop *loop, ev_async *w, int rev
 				_listen_cmd_xschedule_01(listen_cmd, self);
 			}
 			break;
+
 
 			default:
 				PyEval_RestoreThread(self->tstate);
@@ -310,6 +327,32 @@ void _event_loop_error(struct event_loop * self, PyObject * subject, int error_t
 	self->tstate = PyEval_SaveThread();
 }
 
+///
+
+static PyObject * event_loop_on_error_callback_get(struct event_loop * self, void *closure)
+{
+	if (self->on_error)
+	{
+		Py_INCREF(self->on_error);
+		return self->on_error;
+	}
+	Py_RETURN_NONE;
+}
+
+static int event_loop_on_error_callback_set(struct event_loop * self, PyObject *callback, void *closure)
+{
+	if ((callback) != Py_None && !PyCallable_Check((callback)))
+	{
+		PyErr_SetString(PyExc_TypeError, "a callable or None is required");
+		return -1;
+	}
+
+	PyObject *tmp = self->on_error;
+	Py_INCREF(callback);
+	self->on_error = callback;
+	Py_XDECREF(tmp);
+	return 0;
+}
 
 /// --- Python type definition follows
 
@@ -321,9 +364,15 @@ static PyMethodDef event_loop_methods[] = {
 };
 
 static PyMemberDef  event_loop_members[] = {
-	{"on_error", T_OBJECT_EX, offsetof(struct event_loop, on_error), 0, "This event is triggered when error occures."},
+//	{"on_error", T_OBJECT_EX, offsetof(struct event_loop, on_error), 0, "This event is triggered when error occures."},
 	{NULL}  /* Sentinel */
 };
+
+static PyGetSetDef event_loop_tp_getsets[] = {
+    {"on_error", (getter)event_loop_on_error_callback_get, (setter)event_loop_on_error_callback_set, NULL, NULL},
+	{NULL}  /* Sentinel */
+};
+
 
 PyTypeObject pyglev_core_event_loop_type = 
 {
@@ -346,17 +395,17 @@ PyTypeObject pyglev_core_event_loop_type =
 	0,                         /* tp_getattro */
 	0,                         /* tp_setattro */
 	0,                         /* tp_as_buffer */
-	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,        /* tp_flags */
+	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC, /* tp_flags */
 	0,                         /* tp_doc */
     (traverseproc)event_loop_tp_traverse,    /* tp_traverse */
-    (inquiry)event_loop_tp_clear,       /* tp_clear */
+    (inquiry)event_loop_tp_clear,            /* tp_clear */
     0,                         /* tp_richcompare */
     0,                         /* tp_weaklistoffset */
     0,                         /* tp_iter */
     0,                         /* tp_iternext */
     event_loop_methods,        /* tp_methods */
     event_loop_members,        /* tp_members */
-    0,                         /* tp_getset */
+    event_loop_tp_getsets,     /* tp_getset */
     0,                         /* tp_base */
     0,                         /* tp_dict */
     0,                         /* tp_descr_get */
