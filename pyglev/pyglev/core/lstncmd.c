@@ -170,10 +170,10 @@ static PyMethodDef listen_cmd_methods[] = {
 };
 
 static PyMemberDef listen_cmd_members[] = {
-	{"host", T_STRING, offsetof(struct listen_cmd, host), 0, "Host name used for listening"},
-	{"port", T_STRING, offsetof(struct listen_cmd, port), 0, "Port name used for listening"},
-	{"backlog", T_INT, offsetof(struct listen_cmd, backlog), 0, "Size of listen backlog"},
-	{"status", T_CHAR, offsetof(struct listen_cmd, status), 0, "Status of listen command"},
+	{"host", T_STRING, offsetof(struct listen_cmd, host), 1, "Host name used for listening"},
+	{"port", T_STRING, offsetof(struct listen_cmd, port), 1, "Port name used for listening"},
+	{"backlog", T_INT, offsetof(struct listen_cmd, backlog), 1, "Size of listen backlog"},
+	{"status", T_CHAR, offsetof(struct listen_cmd, status), 1, "Status of listen command"},	
 	{NULL}  /* Sentinel */
 };
 
