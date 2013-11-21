@@ -16,6 +16,7 @@ class application(object):
 	def __init__(self):
 		self.exit_code = 0
 		self.event_loop = core.event_loop()
+		self.event_loop.on_error = self.on_error
 
 		if (self.on_init is not None): self.on_init()
 
@@ -32,3 +33,7 @@ class application(object):
 	def listen(self, host, port, backlog=10):
 		cmd = core.listen_cmd(host, str(port), backlog=backlog)
 		self.event_loop._xschedule(cmd)
+
+
+	def on_error(self, subject, error_type, error_code, error_msg):
+		print("Error callback called:", subject, error_type, error_code, error_msg)

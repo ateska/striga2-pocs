@@ -17,6 +17,12 @@ enum pyglev_evloop_cmd_ids
 	pyglev_evloop_cmd_LISTEN_CMD_01 = 50,
 };
 
+enum pyglev_error_types
+{
+	pyglev_error_type_ERRNO = 1, // Errors reported vie errno
+	pyglev_error_type_EAI = 2, // Errors origins at getaddrinfo() function (DNS resolve)
+};
+
 #include "cmdq.h"
 #include "evloop.h"
 #include "lstncmd.h"

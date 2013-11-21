@@ -22,6 +22,7 @@ static PyObject * event_loop_ctor(PyTypeObject *type, PyObject *args, PyObject *
 	struct event_loop *self = (struct event_loop *)type->tp_alloc(type, 0);
 	if (self == NULL) return NULL;
 	self->listen_commands = NULL;
+	self->on_error = NULL;
 
 	// Create event loop
 	self->loop = ev_loop_new(flags);
@@ -273,6 +274,43 @@ static PyObject * event_loop_xschedule(struct event_loop *self, PyObject *args)
 	Py_RETURN_NONE;
 }
 
+
+void _event_loop_error(struct event_loop * self, PyObject * subject, int error_type, int error_code, const char * restrict format, ...)
+{
+	va_list args;
+
+	// Acquire GIL
+	PyEval_RestoreThread(self->tstate);
+
+	PyObject * arg1 = PyLong_FromLong(error_type);
+	PyObject * arg2 = PyLong_FromLong(error_code);
+	va_start(args, format);
+	PyObject* arg3 = PyUnicode_FromFormatV(format, args);
+	va_end(args);
+
+	PyObject *result = PyObject_CallFunctionObjArgs(self->on_error, subject, arg1, arg2, arg3, NULL);
+
+	if (result == NULL)
+	{
+		if (self->on_error == NULL)
+		{
+			PySys_WriteStderr("Event loop error: %s\n", PyUnicode_AsUTF8(arg3));
+			PyErr_Clear();
+
+		} else PyErr_Print();
+	} else {
+		Py_DECREF(result);
+	}
+
+	Py_DECREF(arg3);
+	Py_DECREF(arg2);
+	Py_DECREF(arg1);
+
+	// Release
+	self->tstate = PyEval_SaveThread();
+}
+
+
 /// --- Python type definition follows
 
 static PyMethodDef event_loop_methods[] = {
@@ -280,6 +318,11 @@ static PyMethodDef event_loop_methods[] = {
 	{"schedule", (PyCFunction)event_loop_schedule, METH_VARARGS, "Add callable to command queue."},
 	{"_xschedule", (PyCFunction)event_loop_xschedule, METH_VARARGS, "Add 'special' object to command queue"},
     {NULL}  /* Sentinel */
+};
+
+static PyMemberDef  event_loop_members[] = {
+	{"on_error", T_OBJECT_EX, offsetof(struct event_loop, on_error), 0, "This event is triggered when error occures."},
+	{NULL}  /* Sentinel */
 };
 
 PyTypeObject pyglev_core_event_loop_type = 
