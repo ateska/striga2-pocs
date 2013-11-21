@@ -59,8 +59,24 @@ static PyObject * event_loop_ctor(PyTypeObject *type, PyObject *args, PyObject *
 	return (PyObject *)self;
 }
 
+
+static int event_loop_tp_clear(struct event_loop *self)
+{
+	Py_CLEAR(self->on_error);
+    return 0;
+}
+
+static int event_loop_tp_traverse(struct event_loop *self, visitproc visit, void *arg)
+{
+    Py_VISIT(self->on_error);
+    return 0;
+}
+
+
 static void event_loop_dtor(struct event_loop * self)
 {
+	printf("DEBUG: event_loop_dtor()\n");
+
 	if (self->loop)
 	{
 		if ev_is_active(&self->SIGINT_watcher) ev_signal_stop(self->loop, &self->SIGINT_watcher);
@@ -77,6 +93,7 @@ static void event_loop_dtor(struct event_loop * self)
 		cmd_q_delete(self->cmd_q);
 	}
 
+	event_loop_tp_clear(self);
 	Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
@@ -286,16 +303,16 @@ PyTypeObject pyglev_core_event_loop_type =
 	0,                         /* tp_getattro */
 	0,                         /* tp_setattro */
 	0,                         /* tp_as_buffer */
-	Py_TPFLAGS_DEFAULT,        /* tp_flags */
+	Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,        /* tp_flags */
 	0,                         /* tp_doc */
-    0,                         /* tp_traverse */
-    0,                         /* tp_clear */
+    (traverseproc)event_loop_tp_traverse,    /* tp_traverse */
+    (inquiry)event_loop_tp_clear,       /* tp_clear */
     0,                         /* tp_richcompare */
     0,                         /* tp_weaklistoffset */
     0,                         /* tp_iter */
     0,                         /* tp_iternext */
     event_loop_methods,        /* tp_methods */
-    0,                         /* tp_members */
+    event_loop_members,        /* tp_members */
     0,                         /* tp_getset */
     0,                         /* tp_base */
     0,                         /* tp_dict */
