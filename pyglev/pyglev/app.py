@@ -4,7 +4,7 @@ from . import core
 ###
 
 def _on_error(subject, error_type, error_code, error_msg):
-	print("Error callback called:", subject, error_type, error_code, error_msg)
+	print("Error callback called ({} {}) on".format(error_type, error_code), subject, error_msg)
 
 
 class application(object):

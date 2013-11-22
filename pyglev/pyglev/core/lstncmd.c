@@ -110,7 +110,10 @@ void _listen_cmd_xschedule_01(struct listen_cmd * self, struct event_loop * even
 		rc = getnameinfo(rp->ai_addr, sizeof(struct sockaddr), hoststr, sizeof(hoststr), portstr, sizeof(portstr), NI_NUMERICHOST | NI_NUMERICSERV);
 		if (rc != 0)
 		{
-			printf("Problem occured when resolving listen socket: %s\n",gai_strerror(rc));
+			_event_loop_error(event_loop, 
+				(PyObject *) self, pyglev_error_type_EAI, rc, 
+				"resolving listen address: %s", gai_strerror(rc)
+			);
 			strcpy(hoststr, "?");
 			strcpy(portstr, "?");
 		}
@@ -119,7 +122,10 @@ void _listen_cmd_xschedule_01(struct listen_cmd * self, struct event_loop * even
 		listen_socket[i] = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
 		if (listen_socket[i] < 0)
 		{
-			//LOG_ERRNO(errno, "Failed creating listen socket");
+			_event_loop_error(event_loop, 
+				(PyObject *) self, pyglev_error_type_ERRNO, errno, 
+				"creating listen socket"
+			);
 			failure = true;
 			goto end_freeaddrinfo;
 		}
@@ -129,7 +135,10 @@ void _listen_cmd_xschedule_01(struct listen_cmd * self, struct event_loop * even
 		rc = setsockopt(listen_socket[i], SOL_SOCKET, SO_REUSEADDR, (const char *) &on, sizeof(on));
 		if (rc == -1)
 		{
-			//LOG_ERRNO(errno, "Failed when setting option SO_REUSEADDR to listen socket");
+			_event_loop_error(event_loop, 
+				(PyObject *) self, pyglev_error_type_ERRNO, errno, 
+				"setting SO_REUSEADDR to listen socket"
+			);
 			failure = true;
 			goto end_freeaddrinfo;
 		}
@@ -138,7 +147,10 @@ void _listen_cmd_xschedule_01(struct listen_cmd * self, struct event_loop * even
 		rc = bind(listen_socket[i], rp->ai_addr, rp->ai_addrlen);
 		if (rc != 0)
 		{
-			//LOG_ERRNO(errno, "Failed when binding listen socket to %s %s", hoststr, portstr);
+			_event_loop_error(event_loop, 
+				(PyObject *) self, pyglev_error_type_ERRNO, errno, 
+				"binding listen socket to %s %s", hoststr, portstr
+			);
 			failure = true;
 			goto end_freeaddrinfo;
 		}
@@ -147,7 +159,10 @@ void _listen_cmd_xschedule_01(struct listen_cmd * self, struct event_loop * even
 		rc = listen(listen_socket[i], self->backlog);
 		if (rc != 0)
 		{
-			//LOG_ERRNO(errno, "Listening on %s %s", hoststr, portstr);
+			_event_loop_error(event_loop, 
+				(PyObject *) self, pyglev_error_type_ERRNO, errno, 
+				"listening on socket %s %s", hoststr, portstr
+			);
 			failure = true;
 			goto end_freeaddrinfo;
 		}

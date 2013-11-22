@@ -19,8 +19,14 @@ enum pyglev_evloop_cmd_ids
 
 enum pyglev_error_types
 {
-	pyglev_error_type_ERRNO = 1, // Errors reported vie errno
-	pyglev_error_type_EAI = 2, // Errors origins at getaddrinfo() function (DNS resolve)
+	pyglev_error_type_ERRNO = 1,  // Errors reported vie errno
+	pyglev_error_type_EAI = 2,    // Errors origins at getaddrinfo() function (DNS resolve)
+	pyglev_error_type_GENER = 3,    // General errors (see codes bellow)
+};
+
+enum pyglev_general_error_codes
+{
+	pyglev_general_error_code_LISTEN_ERR = 1,
 };
 
 #include "cmdq.h"

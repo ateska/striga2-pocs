@@ -305,6 +305,18 @@ void _event_loop_error(struct event_loop * self, PyObject * subject, int error_t
 	PyObject* arg3 = PyUnicode_FromFormatV(format, args);
 	va_end(args);
 
+	// If this is errno, append string that describes related error
+	if (error_type == pyglev_error_type_ERRNO)
+	{
+		char buffer[4096];
+		strerror_r(error_code, buffer, sizeof(buffer));
+
+		PyObject* n_arg3 = PyUnicode_FromFormat("%S: %s", arg3, buffer);
+
+		Py_DECREF(arg3);
+		arg3 = n_arg3;
+	}
+
 	PyObject *result = PyObject_CallFunctionObjArgs(self->on_error, subject, arg1, arg2, arg3, NULL);
 
 	if (result == NULL)
