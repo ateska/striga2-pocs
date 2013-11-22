@@ -60,7 +60,7 @@ static void listen_cmd_dtor(struct listen_cmd * self)
 	listen_cmd_tp_clear(self);
 	Py_TYPE(self)->tp_free((PyObject *)self);
 
-//	printf("DEBUG: listen_cmd_dtor()\n");
+	printf("DEBUG: listen_cmd_dtor()\n");
 }
 
 
@@ -224,9 +224,83 @@ void _listen_cmd_close(struct listen_cmd * self, struct event_loop * event_loop)
 	self->status = listen_cmd_status_CLOSED;
 }
 
+///
 
-static void _on_listen_accept(struct ev_loop *loop, struct ev_io *watcher, int revents)
+static void _on_listen_accept(struct ev_loop *ev_loop, struct ev_io *watcher, int revents)
 {
+	struct listen_cmd * self = watcher->data;
+	struct event_loop * loop = ev_userdata(ev_loop);
+
+	if (revents & EV_ERROR)
+	{
+		_event_loop_error(loop,
+			(PyObject *)self, 
+			pyglev_error_type_GENER, pyglev_general_error_code_LISTEN_ERR,
+			"listening"
+		);
+		return;
+	}
+
+	if (revents & EV_READ)
+	{
+		struct sockaddr_storage client_addr;
+		socklen_t client_len = sizeof(struct sockaddr_storage);
+
+		// Accept client request
+		int client_socket = accept(watcher->fd, (struct sockaddr *)&client_addr, &client_len);
+		if (client_socket < 0)
+		{
+			_event_loop_error(loop,
+				(PyObject *)self, 
+				pyglev_error_type_ERRNO, errno,
+				"accepting on listen socket"
+			);
+			return;
+		}
+
+		if (self->status != listen_cmd_status_LISTENING)
+		{
+			_event_loop_error(loop,
+				(PyObject *)self, 
+				pyglev_error_type_GENER, pyglev_general_error_code_LISTEN_ERR,
+				"not LISTENING"
+			);
+			goto exit_close;
+		}
+
+		// Acquire Python GIL
+		PyEval_RestoreThread(loop->tstate);
+
+		//TODO: Pass following information to the green thread
+		// client_addr, client_len
+		// listening_sockobj->domain
+		// listening_sockobj->type
+		// listening_sockobj->protocol
+
+		//TODO:  This is the correct place to start green thread
+
+		// Release Python GIL
+		loop->tstate = PyEval_SaveThread();
+
+/*
+		//TODO: Get initial state of socket watcher (READ and/or write) - probably from a callback or some preset
+		ev_io_set(&new_sockobj->watcher, new_sockobj->watcher.fd, EV_READ);
+		ev_io_start(listening_sockobj->io_thread->loop, &new_sockobj->watcher);
+*/
+
+		return;
+
+exit_release_gil:
+		// Release Python GIL
+		loop->tstate = PyEval_SaveThread();
+
+exit_close:
+		close(client_socket);
+
+		return;
+	}
+
+
 
 }
 
