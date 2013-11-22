@@ -27,6 +27,12 @@ PyMODINIT_FUNC PyInit_core(void)
 	if (PyModule_AddStringConstant(m, "__version__", "TODO"))
 		goto finish_decref;
 
+	if (PyModule_AddIntConstant(m, "EV_READ", EV_READ))
+		goto finish_decref;
+
+	if (PyModule_AddIntConstant(m, "EV_WRITE", EV_WRITE))
+		goto finish_decref;
+
 	Py_INCREF(&pyglev_core_event_loop_type);
     PyModule_AddObject(m, "event_loop", (PyObject *)&pyglev_core_event_loop_type);
 
