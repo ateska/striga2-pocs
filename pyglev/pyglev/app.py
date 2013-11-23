@@ -10,7 +10,7 @@ def _on_error(subject, error_type, error_code, error_msg):
 class application(object):
 
 	# Events
-	on_init = None # def on_init(self):
+	on_prepare = None # def on_prepare(self):
 	on_exit = None # def on_exit(self):
 
 	#TODO: Following callback
@@ -22,7 +22,7 @@ class application(object):
 		self.event_loop = core.event_loop()
 		self.event_loop.on_error = _on_error
 
-		if (self.on_init is not None): self.on_init()
+		if (self.on_prepare is not None): self.on_prepare()
 
 
 	def run(self):

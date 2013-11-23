@@ -2,9 +2,16 @@
 import pyglev
 
 
+def line_protocol(listen_cmd):
+	print("Line protocol!", listen_cmd)
+	yield pyglev.READ
+
+
+###
+
 class demo_app(pyglev.application):
 
-	def on_init(self):
+	def on_prepare(self):
 		self.listen('localhost', 7777)
 
 
