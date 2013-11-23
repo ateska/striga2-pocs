@@ -10,6 +10,8 @@ struct listen_cmd
 
 	struct listen_cmd * next; // Allow to form single-linked list
 
+	PyObject * on_accept;
+
 	char *host;
 	char *port;
 	int backlog;

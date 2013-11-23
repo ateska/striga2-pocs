@@ -103,7 +103,7 @@ static void event_loop_dtor(struct event_loop * self)
 	event_loop_tp_clear(self);
 	Py_TYPE(self)->tp_free((PyObject *)self);
 
-	//printf("DEBUG: event_loop_dtor()\n");
+	printf("DEBUG: event_loop_dtor()\n");
 }
 
 

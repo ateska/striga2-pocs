@@ -8,10 +8,12 @@ static PyObject * listen_cmd_ctor(PyTypeObject *type, PyObject *args, PyObject *
 	char *host;
 	char *port;
 	int backlog = 20;
+	PyObject *protocol;
 
-	static char *kwlist[] = {"host", "port", "backlog", NULL};
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "ss|i:__new__", kwlist,
+	static char *kwlist[] = {"host", "port", "protocol", "backlog", NULL};
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "ssO|i:__new__", kwlist,
 		&host, &port,
+		&protocol,
 		&backlog
 	)) return NULL;
 
@@ -19,25 +21,30 @@ static PyObject * listen_cmd_ctor(PyTypeObject *type, PyObject *args, PyObject *
 	struct listen_cmd *self = (struct listen_cmd *)type->tp_alloc(type, 0);
 	if (self == NULL) return NULL;
 
+
 	// Copy values into members
 	if (strcmp(host, "*") == 0) self->host = NULL;
 	else self->host = strdup(host);
 	self->port = strdup(port);
 	self->backlog = backlog;
 	self->status = listen_cmd_status_INIT;
-
 	self->watchers = NULL;
+
+	self->on_accept = protocol;
+	Py_INCREF(protocol);
 
 	return (PyObject *)self;
 }
 
 static int listen_cmd_tp_clear(struct listen_cmd *self)
 {
+	Py_CLEAR(self->on_accept);
     return 0;
 }
 
 static int listen_cmd_tp_traverse(struct listen_cmd *self, visitproc visit, void *arg)
 {
+	Py_VISIT(self->on_accept);
     return 0;
 }
 
@@ -277,16 +284,50 @@ static void _on_listen_accept(struct ev_loop *ev_loop, struct ev_io *watcher, in
 		// listening_sockobj->type
 		// listening_sockobj->protocol
 
-		//TODO:  This is the correct place to start green thread
+		PyObject * res = PyObject_CallFunctionObjArgs(self->on_accept, self, NULL);
+		if (res == NULL)
+		{
+			PyErr_Print();
+			goto exit_release_gil;
+		}
 
-		// Release Python GIL
-		loop->tstate = PyEval_SaveThread();
+		// If 'False' or None is retrieved, silently close a socket
+		if ((PyObject_Not(res) == 1)||(res == Py_None))
+		{
+			Py_DECREF(res);
+			goto exit_release_gil;	
+		}
 
+		if (PyGen_Check(res) != true)
+		{
+			PyObject* x = PyUnicode_FromFormat("%R", res);
+			PySys_WriteStderr("%s is not generator\n", PyUnicode_AsUTF8(x));
+			Py_DECREF(x);
+
+			Py_DECREF(res);
+
+			goto exit_release_gil;	
+		}
+
+		// First step in interator
 /*
 		//TODO: Get initial state of socket watcher (READ and/or write) - probably from a callback or some preset
 		ev_io_set(&new_sockobj->watcher, new_sockobj->watcher.fd, EV_READ);
 		ev_io_start(listening_sockobj->io_thread->loop, &new_sockobj->watcher);
 */
+		PyObject* x = PyIter_Next(res);
+		if (x == NULL)
+		{
+			PyErr_Print();
+			goto exit_release_gil;
+		}
+		Py_DECREF(x);
+
+
+		Py_DECREF(res);
+
+		// Release Python GIL
+		loop->tstate = PyEval_SaveThread();
 
 		return;
 
@@ -315,6 +356,7 @@ static PyMemberDef listen_cmd_members[] = {
 	{"port", T_STRING, offsetof(struct listen_cmd, port), 1, "Port name used for listening"},
 	{"backlog", T_INT, offsetof(struct listen_cmd, backlog), 1, "Size of listen backlog"},
 	{"status", T_CHAR, offsetof(struct listen_cmd, status), 1, "Status of listen command"},	
+	{"on_accept", T_OBJECT_EX, offsetof(struct listen_cmd, on_accept), 0, "This event is triggered when new connection is accepted."},
 	{NULL}  /* Sentinel */
 };
 

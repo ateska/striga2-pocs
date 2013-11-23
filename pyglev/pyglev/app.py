@@ -36,7 +36,7 @@ class application(object):
 		sys.exit(self.exit_code)
 
 
-	def listen(self, host, port, backlog=10):
-		cmd = core.listen_cmd(host, str(port), backlog=backlog)
+	def listen(self, host, port, protocol, backlog=10):
+		cmd = core.listen_cmd(host, str(port), protocol, backlog=backlog)
 		self.event_loop._xschedule(cmd)
-
+		return cmd

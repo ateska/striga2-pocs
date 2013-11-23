@@ -12,7 +12,7 @@ def line_protocol(listen_cmd):
 class demo_app(pyglev.application):
 
 	def on_prepare(self):
-		self.listen('localhost', 7777)
+		self.listen('localhost', 7777, line_protocol)
 
 
 if __name__ == '__main__':
