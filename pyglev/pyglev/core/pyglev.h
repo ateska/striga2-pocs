@@ -32,5 +32,6 @@ enum pyglev_general_error_codes
 #include "cmdq.h"
 #include "evloop.h"
 #include "lstncmd.h"
+#include "estsock.h"
 
 #endif //PYGLEV_H_

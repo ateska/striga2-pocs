@@ -22,6 +22,7 @@ static PyObject * event_loop_ctor(PyTypeObject *type, PyObject *args, PyObject *
 	struct event_loop *self = (struct event_loop *)type->tp_alloc(type, 0);
 	if (self == NULL) return NULL;
 	self->listen_commands = NULL;
+	self->established_sockets = NULL;
 	self->on_error = NULL;
 
 	// Create event loop
@@ -84,6 +85,8 @@ static int event_loop_tp_traverse(struct event_loop *self, visitproc visit, void
 
 static void event_loop_dtor(struct event_loop * self)
 {
+	//TODO: Ensure self->established_sockets == NULL (remove all) ...
+
 	if (self->loop)
 	{
 		if ev_is_active(&self->SIGINT_watcher) ev_signal_stop(self->loop, &self->SIGINT_watcher);
@@ -388,7 +391,7 @@ static PyGetSetDef event_loop_tp_getsets[] = {
 
 PyTypeObject pyglev_core_event_loop_type = 
 {
-	PyVarObject_HEAD_INIT(NULL, 0)
+	PyObject_HEAD_INIT(NULL)
 	"pyglev.core.event_loop",  /* tp_name */
 	sizeof(struct event_loop), /* tp_basicsize */
 	0,                         /* tp_itemsize */

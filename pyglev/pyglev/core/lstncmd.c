@@ -1,6 +1,6 @@
 #include "pyglev.h" 
 
-static void _on_listen_accept(struct ev_loop *loop, struct ev_io *watcher, int revents);
+static void _on_listen_socket_io(struct ev_loop *loop, struct ev_io *watcher, int revents);
 ///
 
 static PyObject * listen_cmd_ctor(PyTypeObject *type, PyObject *args, PyObject *kwargs)
@@ -8,12 +8,12 @@ static PyObject * listen_cmd_ctor(PyTypeObject *type, PyObject *args, PyObject *
 	char *host;
 	char *port;
 	int backlog = 20;
-	PyObject *protocol;
+	PyObject *on_accept = NULL;
 
-	static char *kwlist[] = {"host", "port", "protocol", "backlog", NULL};
-	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "ssO|i:__new__", kwlist,
+	static char *kwlist[] = {"host", "port", "on_accept", "backlog", NULL};
+	if (!PyArg_ParseTupleAndKeywords(args, kwargs, "ss|Oi:__new__", kwlist,
 		&host, &port,
-		&protocol,
+		&on_accept,
 		&backlog
 	)) return NULL;
 
@@ -30,8 +30,8 @@ static PyObject * listen_cmd_ctor(PyTypeObject *type, PyObject *args, PyObject *
 	self->status = listen_cmd_status_INIT;
 	self->watchers = NULL;
 
-	self->on_accept = protocol;
-	Py_INCREF(protocol);
+	self->on_accept = on_accept;
+	Py_XINCREF(on_accept);
 
 	return (PyObject *)self;
 }
@@ -70,6 +70,7 @@ static void listen_cmd_dtor(struct listen_cmd * self)
 	printf("DEBUG: listen_cmd_dtor()\n");
 }
 
+///
 
 void _listen_cmd_xschedule_01(struct listen_cmd * self, struct event_loop * event_loop)
 {
@@ -179,7 +180,7 @@ void _listen_cmd_xschedule_01(struct listen_cmd * self, struct event_loop * even
 	i=0;
 	for (struct addrinfo *rp = ans; rp != NULL; rp = rp->ai_next, i++)
 	{
-		ev_io_init(&self->watchers[i], _on_listen_accept, listen_socket[i], EV_READ);
+		ev_io_init(&self->watchers[i], _on_listen_socket_io, listen_socket[i], EV_READ);
 		self->watchers[i].data = self;
 		// new_sockobj->domain = rp->ai_family;
 		// new_sockobj->type = rp->ai_socktype;
@@ -233,7 +234,96 @@ void _listen_cmd_close(struct listen_cmd * self, struct event_loop * event_loop)
 
 ///
 
-static void _on_listen_accept(struct ev_loop *ev_loop, struct ev_io *watcher, int revents)
+static void _on_listen_socket_accept(struct listen_cmd * self, struct event_loop * loop, int listen_fd)
+{
+	struct sockaddr_storage client_addr;
+	socklen_t client_len = sizeof(struct sockaddr_storage);
+
+	// Accept client request
+	int client_socket = accept(listen_fd, (struct sockaddr *)&client_addr, &client_len);
+	if (client_socket < 0)
+	{
+		_event_loop_error(loop,
+			(PyObject *)self, 
+			pyglev_error_type_ERRNO, errno,
+			"accepting on listen socket"
+		);
+		return;
+	}
+
+	if (self->status != listen_cmd_status_LISTENING)
+	{
+		_event_loop_error(loop,
+			(PyObject *)self, 
+			pyglev_error_type_GENER, pyglev_general_error_code_LISTEN_ERR,
+			"not LISTENING"
+		);
+		goto exit_close;
+	}
+
+	// Acquire Python GIL
+	PyEval_RestoreThread(loop->tstate);
+
+	//TODO: Pass following information to the green thread
+	// client_addr, client_len
+	// listening_sockobj->domain
+	// listening_sockobj->type
+	// listening_sockobj->protocol
+
+	PyObject * protocol = PyObject_CallFunctionObjArgs(self->on_accept, self, NULL);
+	if (protocol == NULL)
+	{
+		PyErr_Print();
+		goto exit_release_gil;
+	}
+
+	// If 'False' or None is retrieved, silently close a socket
+	if ((PyObject_Not(protocol) == 1)||(protocol == Py_None))
+	{
+		goto exit_remove_protocol;	
+	}
+
+	if (PyGen_Check(protocol) != true)
+	{
+		PyObject* x = PyUnicode_FromFormat("%R", protocol);
+		PySys_WriteStderr("%s is not generator\n", PyUnicode_AsUTF8(x));
+		Py_DECREF(x);
+
+		goto exit_remove_protocol;	
+	}
+
+	struct est_socket * est_socket = est_socket_new(loop, protocol, client_socket);
+	if (est_socket == NULL)
+	{
+		PyErr_Print();
+		goto exit_remove_protocol;
+	}
+
+	Py_DECREF(protocol);
+
+	// Add newly established socket into event loop list
+	est_socket->next = loop->established_sockets;
+	loop->established_sockets = est_socket;
+
+	// Release Python GIL
+	loop->tstate = PyEval_SaveThread();
+
+	return;
+
+exit_remove_protocol:
+	Py_DECREF(protocol);
+
+exit_release_gil:
+	// Release Python GIL
+	loop->tstate = PyEval_SaveThread();
+
+exit_close:
+	close(client_socket);
+
+	return;
+}
+
+static void _on_listen_socket_io(struct ev_loop *ev_loop, struct ev_io *watcher, int revents)
 {
 	struct listen_cmd * self = watcher->data;
 	struct event_loop * loop = ev_userdata(ev_loop);
@@ -248,100 +338,8 @@ static void _on_listen_accept(struct ev_loop *ev_loop, struct ev_io *watcher, in
 		return;
 	}
 
-	if (revents & EV_READ)
-	{
-		struct sockaddr_storage client_addr;
-		socklen_t client_len = sizeof(struct sockaddr_storage);
-
-		// Accept client request
-		int client_socket = accept(watcher->fd, (struct sockaddr *)&client_addr, &client_len);
-		if (client_socket < 0)
-		{
-			_event_loop_error(loop,
-				(PyObject *)self, 
-				pyglev_error_type_ERRNO, errno,
-				"accepting on listen socket"
-			);
-			return;
-		}
-
-		if (self->status != listen_cmd_status_LISTENING)
-		{
-			_event_loop_error(loop,
-				(PyObject *)self, 
-				pyglev_error_type_GENER, pyglev_general_error_code_LISTEN_ERR,
-				"not LISTENING"
-			);
-			goto exit_close;
-		}
-
-		// Acquire Python GIL
-		PyEval_RestoreThread(loop->tstate);
-
-		//TODO: Pass following information to the green thread
-		// client_addr, client_len
-		// listening_sockobj->domain
-		// listening_sockobj->type
-		// listening_sockobj->protocol
-
-		PyObject * res = PyObject_CallFunctionObjArgs(self->on_accept, self, NULL);
-		if (res == NULL)
-		{
-			PyErr_Print();
-			goto exit_release_gil;
-		}
-
-		// If 'False' or None is retrieved, silently close a socket
-		if ((PyObject_Not(res) == 1)||(res == Py_None))
-		{
-			Py_DECREF(res);
-			goto exit_release_gil;	
-		}
-
-		if (PyGen_Check(res) != true)
-		{
-			PyObject* x = PyUnicode_FromFormat("%R", res);
-			PySys_WriteStderr("%s is not generator\n", PyUnicode_AsUTF8(x));
-			Py_DECREF(x);
-
-			Py_DECREF(res);
-
-			goto exit_release_gil;	
-		}
-
-		// First step in interator
-/*
-		//TODO: Get initial state of socket watcher (READ and/or write) - probably from a callback or some preset
-		ev_io_set(&new_sockobj->watcher, new_sockobj->watcher.fd, EV_READ);
-		ev_io_start(listening_sockobj->io_thread->loop, &new_sockobj->watcher);
-*/
-		PyObject* x = PyIter_Next(res);
-		if (x == NULL)
-		{
-			PyErr_Print();
-			goto exit_release_gil;
-		}
-		Py_DECREF(x);
-
-
-		Py_DECREF(res);
-
-		// Release Python GIL
-		loop->tstate = PyEval_SaveThread();
-
-		return;
-
-exit_release_gil:
-		// Release Python GIL
-		loop->tstate = PyEval_SaveThread();
-
-exit_close:
-		close(client_socket);
-
-		return;
-	}
-
-
+	if (revents & EV_READ) 
+		_on_listen_socket_accept(self, loop, watcher->fd);
 
 }
 
@@ -362,7 +360,7 @@ static PyMemberDef listen_cmd_members[] = {
 
 PyTypeObject pyglev_core_listen_cmd_type = 
 {
-	PyVarObject_HEAD_INIT(NULL, 0)
+	PyObject_HEAD_INIT(NULL)
 	"pyglev.core.listen_cmd",  /* tp_name */
 	sizeof(struct listen_cmd), /* tp_basicsize */
 	0,                         /* tp_itemsize */

@@ -22,6 +22,7 @@ struct event_loop
 	PyObject * on_error;
 
 	struct listen_cmd * listen_commands;
+	struct est_socket * established_sockets; // Single-linked list
 };
 
 // Used to propagate error into application

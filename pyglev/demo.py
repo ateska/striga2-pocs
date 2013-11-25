@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 import pyglev
 
-
 def line_protocol(listen_cmd):
-	print("Line protocol!", listen_cmd)
-	yield pyglev.READ
+	print("Protocol established")
+	
+	data = yield pyglev.READ
 
+	print("1) Protocol reveiced: ", data)
+
+	data = yield pyglev.READ
+	
+	print("2) Protocol reveiced: ", data)
 
 ###
 
